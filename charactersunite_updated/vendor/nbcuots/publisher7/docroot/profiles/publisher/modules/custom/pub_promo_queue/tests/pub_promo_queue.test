@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * Test file for the Publisher Promo Queue module.
+ */
+
+class PublisherPromoQueueBaseTest extends PublisherWebTestCase {
+  protected $promo_queue_user;
+  protected $promo_queue_entity = null;
+
+  /**
+   * Implementation of setUp().
+   */
+  function setUp() {
+    // Enable a couple modules.
+    parent::setUp('pub_promo_queue', 'pub_workbench');
+
+    // Create an admin user with all the permissions needed to run tests.
+    $this->promo_queue_user = $this->drupalCreateUser(array(
+      'view the administration theme',
+      'administer queue',
+      'administer queue types',
+      'create promo_queue queue',
+      'edit any promo_queue queue',
+    ));
+    $credentials = array(
+      'name' => $this->promo_queue_user->mail,
+      'pass' => $this->promo_queue_user->pass_raw,
+    );
+    $this->drupalPost('user/login', $credentials, t('Log in'));
+
+    // Create a default Promo Queue for testing.
+    $this->promo_queue_entity = $this->create();
+  }
+
+  /**
+   * Creates the a Promo Queue for testing.
+   */
+  function create($field_values = null) {
+    if (empty($field_values) ) {
+      $field_values = array();
+      $field_values['title'] = $this->randomName(16);
+    }
+
+    $this->drupalPost('admin/content/queues/add/promo_queue', $field_values, t('Save queue'));
+
+    // Retrieve the Promo Queue just created and return it for later comparison.
+    $query = new EntityFieldQuery();
+    $entities = $query->entityCondition('entity_type', 'queues')
+      ->entityCondition('bundle', 'promo_queue')
+      ->propertyCondition('status', 1)
+      ->propertyCondition('title', $field_values['title'])
+      ->range(0, 1)
+      ->execute();
+
+    if (!empty($entities['queues'])) {
+      return entity_load('queues', array_keys($entities['queues']));
+    }
+    return null;
+  }
+}
+
+class PublisherCreatePromoQueueTest extends PublisherPromoQueueBaseTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Create Promo Queues'),
+      'description' => t('Tests involving creating a Promo Queue'),
+      'group' => t('Publisher Promo Queue'),
+    );
+  }
+
+  /**
+   * Create a basic Promo Queue.
+   */
+  function testCreatePromoQueueWithoutLogMessage() {
+    $field_values = array();
+    $field_values['title'] = $this->randomName(16);
+    $promo_queue = $this->create($field_values);
+
+    if (empty($promo_queue)) {
+      $this->fail('Unable to create a Promo Queue.');
+    }
+    $promo_queue_id = array_shift(array_keys($promo_queue));
+
+    $edit_path = 'admin/content/queues/manage/' . $promo_queue_id;
+
+    $this->drupalGet($edit_path);
+    $this->assertResponse(200, 'The edit page for the new Promo Queue exists.');
+  }
+}

@@ -1,0 +1,10 @@
+name = Pub TV Relationships Enhanced
+description = Publisher 7 TV Enhanced Relationships
+core = 7.x
+version = 7.x-1.0
+package = Publisher
+dependencies[] = pub_relationships
+dependencies[] = entity
+dependencies[] = xautoload
+files[] = pub_tv_relationships_enhanced.views.inc
+files[] = test/pub_relationships_tv_enhanced_view.test

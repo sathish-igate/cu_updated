@@ -1,0 +1,93 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Movie feature.
+ */
+
+include_once 'pub_movie.features.inc';
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_movie_form_movie_node_form_alter(&$form, &$form_state, $form_id) {
+  // Move additional information, cast/crew and basic information tabs to the
+  // top of the vertical tabs.
+  $form['#groups']['group_additional_information']->weight = -101;
+  $form['#groups']['group_cast_crew']->weight = -102;
+  $form['#groups']['group_required_information']->weight = -103;
+
+
+  // Get the character term(s) from the role vocabulary.
+  $character_role_term = taxonomy_get_term_by_name('character', 'role');
+  $character_role_id = '';
+
+  // Loop through the results and get the term id of the first term matching
+  // character.
+  foreach ($character_role_term as $key => $term) {
+    if (strtolower($term->name) == 'character') {
+      $character_role_id = $key;
+      break;
+    }
+  }
+
+  // If we don't find a character term in the role vocab, there's no reason to
+  // go further since the user won't be able to select the character role.
+  if (!empty($character_role_id)) {
+    $lang = $form['language']['#value'];
+
+    $field_indices = array_filter(array_keys($form['field_movie_credit'][$lang]), 'is_int');
+    foreach ($field_indices as $key) {
+      if (isset($form['field_movie_credit'][$lang][$key]['field_movie_credit_role']) &&
+          isset($form['field_movie_credit'][$lang][$key]['field_movie_credit_character'])) {
+
+        // Show the character field only if the character role has been selected.
+        $form['field_movie_credit'][$lang][$key]['field_movie_credit_character']['#states']['visible'] = array(
+          ':input[name="field_movie_credit[' . $lang . '][' . $key . '][field_movie_credit_role][' . $lang . ']"]' => array('value' => "$character_role_id"),
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * Add custom taxonomy terms to the vocabularies created by this module.
+ */
+function pub_movie_entity_insert($entity, $type) {
+  if ($type == 'taxonomy_vocabulary') {
+
+    $terms = array();
+    switch ($entity->machine_name) {
+      case 'movie_rating':
+        $terms = array(
+          'G',
+          'PG',
+          'PG-13',
+          'R',
+          'NC-17',
+          'Unrated',
+        );
+        break;
+
+      case 'movie_types':
+        $terms = array(
+          'Syndicated',
+          'Original',
+          'Documentary',
+        );
+        break;
+    }
+
+    $i = 0;
+    foreach ($terms as $name) {
+      $term = new StdClass();
+      $term->name = $name;
+      $term->vid = $entity->vid;
+      $term->vocabulary_machine_name = $entity->machine_name;
+      $term->weight = $i;
+      taxonomy_term_save($term);
+      $i++;
+    }
+  }
+}

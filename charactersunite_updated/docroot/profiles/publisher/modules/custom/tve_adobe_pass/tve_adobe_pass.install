@@ -1,0 +1,84 @@
+<?php
+/**
+ * @file
+ * Install/uninstall for the Adobe Pass module.
+ *
+ * @ingroup tve_adobe_pass
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function tve_adobe_pass_uninstall() {
+  variable_del('tve_adobe_pass_accessenabler_loc');
+  variable_del('tve_adobe_pass_timeout_length');
+  variable_del('tve_adobe_pass_flash_ver');
+  variable_del('tve_adobe_pass_requestor_id');
+  variable_del('tve_adobe_pass_resource_id');
+  variable_del('tve_adobe_pass_message_internal_err');
+  variable_del('tve_adobe_pass_message_auth_err');
+  variable_del('tve_adobe_pass_message_generic_err');
+  variable_del('tve_adobe_pass_logging');
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function tve_adobe_pass_requirements($phase) {
+  $requirements = array();
+
+  switch ($phase) {
+    case 'runtime':
+      $t = get_t();
+
+      // SWFObject library dependency.
+      $library = drupal_get_library('tve_adobe_pass', 'swfobject');
+      $requirements['tve_adobe_pass_swfobj_dependency'] = array(
+        'title' => 'TVE Adobe Pass dependency',
+        'severity' => REQUIREMENT_OK,
+        'value' => $t('OK'),
+      );
+      if ($library) {
+        $requirements['tve_adobe_pass_swfobj_dependency']['description'] = $t('SWFObject JS library version %version is installed and enabled.', array('%version' => $library['version']));
+      }
+      else {
+        $requirements['tve_adobe_pass_swfobj_dependency']['description'] = $t('SWFObject JS library is not installed or enabled.');
+        $requirements['tve_adobe_pass_swfobj_dependency']['severity'] = REQUIREMENT_ERROR;
+        $requirements['tve_adobe_pass_swfobj_dependency']['value'] = $t('Missing SWFObject library');
+      }
+
+      // jQuery library dependency.
+      $jquery_version_required = '1.7';
+      $jquery_version = variable_get('jquery_update_jquery_version', $t('n/a'));
+      $requirements['tve_adobe_pass_jquery_dependency'] = array(
+        'title' => 'TVE Adobe Pass dependency',
+        'description' => $t('jQuery library version %jquery_ver or greater required.',
+          array('%jquery_ver' => $jquery_version_required)
+        ),
+        'value' => $t('jQuery ver. %jquery_ver',
+          array('%jquery_ver' => $jquery_version)
+        ),
+        'severity' => REQUIREMENT_OK,
+      );
+      if (version_compare($jquery_version, $jquery_version_required, 'lt')) {
+        $requirements['tve_adobe_pass_jquery_dependency']['severity'] = REQUIREMENT_ERROR;
+      }
+
+      // Configuration check.
+      $requirements['tve_adobe_pass'] = array(
+        'title' => 'TVE Adobe Pass',
+        'description' => $t('TVE Adobe Pass module is configured.'),
+        'severity' => REQUIREMENT_OK,
+        'value' => $t('OK'),
+      );
+      if (!variable_get('tve_adobe_pass_requestor_id') || !variable_get('tve_adobe_pass_resource_id')) {
+        $requirements['tve_adobe_pass']['description'] = $t('TVE Adobe Pass module is not configured properly.');
+        $requirements['tve_adobe_pass']['severity'] = REQUIREMENT_ERROR;
+        $requirements['tve_adobe_pass']['value'] = $t('Missing Requestor ID and/or Resource ID.');
+      }
+
+      break;
+  }
+
+  return $requirements;
+}

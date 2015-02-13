@@ -1,0 +1,218 @@
+<?php
+
+/**
+ * Publisher additions to State flow.
+ */
+
+/**
+ * Implements hook_theme().
+ */
+function pub_state_flow_theme($existing, $type, $theme, $path) {
+  return array(
+    'edit_revision_text' => array(
+      'variables' => array(),
+    ),
+  );
+}
+
+/**
+ * Theme implementation.
+ *
+ * @see pub_state_flow_theme()
+ */
+function theme_edit_revision_text($variables) {
+  return '<div class="revision-text highlight-text">' . t('You are editing a published revision. A new draft will be created on save.') . '</div>';
+}
+
+/**
+ * Set new content types to be unpublished with a new revision as the default.
+ *
+ * Set all new content types to unpublished and new revision by default. Also
+ * allow existing content types to override the published default value.
+ *
+ * Remove sticky/promote entirely from add and edit content type forms.
+ *
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_state_flow_form_node_type_form_alter(&$form, &$form_state, $form_id) {
+  // Set all new content types to unpublished and new revision by default.
+  $form['workflow']['node_options']['#default_value'] = variable_get('node_options_' . $form['type']['#default_value'], array('revision'));
+  // Remove sticky/promote entirely from add and edit content type forms.
+  $options = array('promote', 'sticky');
+  foreach ($options as $key) {
+    unset($form['workflow']['node_options']['#options'][$key]);
+  }
+}
+
+/**
+ * Remove sticky/promote entirely from node/X/edit & node/X/add forms.
+ *
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function pub_state_flow_form_node_form_alter(&$form, &$form_state, $form_id) {
+
+  $form['#attached']['css'][] = drupal_get_path('module', 'pub_state_flow') . '/css/pub-state-flow.css';
+
+  $options = array('promote', 'sticky', 'status');
+  foreach ($options as $key) {
+    // Just incase.
+    if (isset($form['options'][$key])) {
+      $form['options'][$key]['#access'] = FALSE;
+    }
+  }
+
+  // Move "Publishing options" vertical tab above the "Menu settings" vertical
+  // tab. Technically it is supposed to be below "Additional information", but
+  // setting that value doesn't work for some reason. This does the same thing.
+  // It's default #weight is 95.
+  if (array_key_exists('menu', $form)) {
+    $form['options']['#weight'] = $form['menu']['#weight'] - 1;
+  }
+
+  // Move "Create new revision" checkbox & "Revision log message" textarea from
+  // "Revision information" vertical tab into "Publishing options" vertical tab.
+  $form['options']['revision'] = $form['revision_information']['revision'];
+  $form['options']['log'] = $form['revision_information']['log'];
+
+  // Move "Collection" into the options tab. Not this is an actual "Collection"
+  // module field, not "Field Collection".
+  if (isset($form['field_collection'])) {
+    $form['options']['field_collection'] = $form['field_collection'];
+    $form['options']['field_collection']['#weight'] = -1;
+  }
+
+  // Lets also make sure it's always set to TRUE and it's disable.
+  $form['options']['revision']['#default_value'] = TRUE;
+  $form['options']['revision']['#value'] = TRUE;
+  $form['options']['revision']['#disabled'] = TRUE;
+
+  // It's almost impossible to know whether a revision it's being edited
+  // over a regular node.
+  // Ideas welcome.
+  if (arg(2) === 'revisions' && is_numeric(arg(3))) {
+    $form['options']['revision']['#value'] = FALSE;
+  }
+
+  // Show the text if this node is being edited.
+  if (isset($form['nid']['#value']) && is_numeric($form['nid']['#value'])) {
+    // Lets only do this when it's a published revision.
+    if (isset($form['#node']->status) && $form['#node']->status == 1) {
+      $form['options']['revision']['#prefix'] = theme('edit_revision_text');
+    }
+  }
+
+  // Hide/unset the "Revision information vertical tab".
+  unset($form['revision_information']);
+
+  // Hide/unset extra collection fields in 'Additional Information' tab.
+  unset($form['field_collection']);
+
+  // Now lets remove the preview button and give the submit button some text.
+  // No preview for you!
+  $form['actions']['preview']['#access'] = FALSE;
+  $form['#submit'][] = 'pub_state_flow_node_form_save';
+
+}
+
+/**
+ * Submit callback from node form.
+ *
+ * @see pub_state_flow_form_node_form_alter()
+ */
+function pub_state_flow_node_form_save($form, &$form_state) {
+  drupal_set_message(t('This revision is now available to be published.'));
+}
+
+/**
+ * Remove specified items from the "Update options" drop down.
+ *
+ * Remove demote, promote, sticky & unsticky from "Update options" drop down on
+ * admin/content form.
+ *
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_state_flow_form_node_admin_content_alter(&$form, &$form_state, $form_id) {
+  $options = array('demote', 'promote', 'sticky', 'unsticky');
+  foreach ($options as $key) {
+    unset($form['admin']['options']['operation']['#options'][$key]);
+  }
+}
+
+/**
+ * Implements state_flow_events_page_alter.
+ */
+function pub_state_flow_state_flow_events_page_alter(&$output, $node, $events) {
+  // Local variable for date format. We set this initially with a hook_install()
+  // and hook_update. Change it in the *.install file if you need to change it.
+  $workflow_date_format = variable_get('state_machine_date_format', 'short');
+
+  drupal_add_css(drupal_get_path('module', 'pub_state_flow') . '/css/pub-state-flow.css');
+
+  $revision_history = pub_state_flow_get_latest_history($node);
+
+  // Format the current revision block, set the weight so elements appear in
+  // correct order.
+  $output['content']['current_revision']['#attributes']['class'][] = 'current-revision';
+  $output['content']['current_revision']['current_revision_status']['#title']  = 'Status:';
+  if (!empty($revision_history)) {
+    $output['content']['current_revision']['current_revision_status']['#markup'] = $revision_history->state;
+
+    // Add the revision date and author from node_revision_state_history to the
+    // block.
+    $output['content']['current_revision']['current_revision_date'] = array(
+      '#type' => 'item',
+      '#title' => 'Last Updated:',
+      '#markup' => format_date($revision_history->timestamp, 'edit_date') . " by " . $revision_history->name,
+      '#weight' => 3,
+    );
+  }
+
+  $output['content']['current_revision']['current_revision_actions']['#weight'] = 4;
+  $output['content']['current_revision']['current_revision_actions']['#prefix'] = "<div class='actions'>";
+  $output['content']['current_revision']['current_revision_actions']['#suffix'] = "</div>";
+  $output['content']['current_revision']['current_revision_actions']['#title'] = 'Actions:';
+
+}
+
+/**
+ * Retrieve information about the date and the user who updated a node.
+ *
+ * Retrieve the correct information to display the actual date and user who
+ * updated the state of a node.
+ */
+function pub_state_flow_get_latest_history($node) {
+
+  $query = db_select('node_revision_states_history', 'r');
+  $query->join('users', 'u', 'u.uid = r.uid');
+
+  $result = $query
+    ->fields('r', array('nid', 'vid', 'state', 'timestamp', 'uid', 'log'))
+    ->fields('u', array('name'))
+    ->condition('r.nid', $node->nid)
+    ->condition('r.vid', $node->vid)
+    ->orderBy('r.vid', 'ASC')
+    ->execute();
+
+  $revision_history = array();
+
+  foreach ($result as $revision) {
+    $revision_history[$revision->vid][$revision->timestamp] = $revision;
+  }
+
+  if (!empty($revision_history)) {
+    return end($revision_history[$node->vid]);
+  }
+
+  return $revision_history;
+}
+
+/**
+ * Implements hook_state_flow_event_fired().
+ */
+function pub_state_flow_state_flow_event_fired($node, $event_key, $uid, $log) {
+
+  // Clear the entitycache module's cache on all state flow changes.
+  if (module_exists('entitycache')) {
+    module_invoke('entitycache', 'entity_update', $node, 'node');
+  }
+}

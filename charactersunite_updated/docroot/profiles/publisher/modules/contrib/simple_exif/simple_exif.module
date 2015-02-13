@@ -1,0 +1,256 @@
+<?php
+
+
+use PHPExif\Exif;
+
+/**
+ * Implements hook_menu().
+ */
+function simple_exif_menu() {
+
+  $items['admin/config/media/simple-exif'] = array(
+    'title' => 'Simple EXIF/IPTC Mappings',
+    'description' => 'Customize mappings of EXIF/IPTC data',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('simple_exif_mappings'),
+    'access callback' => 'user_access',
+    'access arguments' => array(
+      'administer files',
+    ),
+    'file' => 'simple_exif.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Simple Exif Library Loader.
+ *
+ * Composer Manager does not auto-load :-/
+ */
+function _simple_exif_load_lib() {
+  module_load_include('php', 'simple_exif', 'php-exif-master/lib/PHPExif/Reader');
+  module_load_include('php', 'simple_exif', 'php-exif-master/lib/PHPExif/Exif');
+  $reader = new PHPExif\Reader();
+  return $reader;
+}
+
+/**
+ * EFIX/IPTC Mapping.
+ */
+function _simple_exif_fields() {
+
+  $mappings = array(
+    'getAuthor' => array(
+      'title' => t('Author'),
+    ),
+    'getHeadline' => array(
+      'title' => t('Headline'),
+    ),
+    'getCredit' => array(
+      'title' => t('Credit'),
+    ),
+    'getSource' => array(
+      'title' => t('Source'),
+    ),
+    'getJobtitle' => array(
+      'title' => t('Job Title'),
+    ),
+    'getTitle' => array(
+      'title' => t('Title'),
+      'example' => 'Morning Glory Pool',
+    ),
+    'getKeywords' => array(
+      'title' => t('Keywords'),
+      'example' => 'Tag 1, Tag 2, Tag 3',
+    ),
+    'getCopyright' => array(
+      'title' => t('Copyright'),
+      'example' => 'getCopyright',
+    ),
+    'getCaption' => array(
+      'title' => t('Caption'),
+      'example' => 'Caption',
+    ),
+    'getCreationDate' => array(
+      'title' => t('Creation Date'),
+      'example' => '2013-06-13 20:01:50',
+    ),
+    'getWidth' => array(
+      'title' => t('Width'),
+      'example' => '4288',
+    ),
+    'getHeight' => array(
+      'title' => t('Height'),
+      'example' => '2848',
+    ),
+    'getHorizontalResolution' => array(
+      'title' => t('Horizontal Resolution'),
+      'example' => '240',
+    ),
+    'getVerticalResolution' => array(
+      'title' => t('Vertical Resolution'),
+      'example' => '240',
+    ),
+    'getFocalLength' => array(
+      'title' => t('Focal Length'),
+      'example' => '18',
+    ),
+    'getCamera' => array(
+      'title' => t('Camera'),
+      'example' => 'NIKON D90',
+    ),
+    'getSoftware' => array(
+      'title' => t('Software'),
+      'example' => 'Adobe Photoshop Lightroom',
+    ),
+    'getAperture' => array(
+      'title' => t('Aperture'),
+      'example' => 'Aperture',
+    ),
+    'getExposureMilliseconds' => array(
+      'title' => t('Exposure Milliseconds'),
+      'example' => 'Exposure Milliseconds',
+    ),
+    'getFocusDistance' => array(
+      'title' => t('Focus Distance'),
+      'example' => '7.94m',
+    ),
+    'getExposure' => array(
+      'title' => t('Exposure Time'),
+      'example' => '1/320',
+    ),
+    'getIso' => array(
+      'title' => t('Iso'),
+      'example' => '200',
+    ),
+  );
+
+  return $mappings;
+}
+
+/**
+ * Actually read the EXIF/IPTC data from a File Entity.
+ */
+function _simple_exif_read_exif_data($FileEntity) {
+  if (!empty($FileEntity->uri)) {
+    $path = drupal_realpath($FileEntity->uri);
+    $reader = _simple_exif_load_lib();
+    try {
+      $exif = $reader->getExifFromFile($path);
+      return $exif;
+    }
+    catch (Exception $e) {
+      return FALSE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function simple_exif_form_alter(&$form, &$form_state, $form_id) {
+  // Make sure we have an entity to work with.
+  if (!isset($form['#entity'])) {
+    return;
+  }
+
+  if ((($form_id === 'file_entity_add_upload' && isset($form['#step']) && $form['#step'] == 4) || (strpos($form_id, 'media_edit') === 0)) && (strstr($form['#entity']->filemime, "image")) || $form_id === 'file_entity_edit' && strstr($form['#entity']->filemime, "image")) {
+    $exif = _simple_exif_read_exif_data($form['#entity']);
+    if ($exif !== FALSE) {
+      $field_mapping = variable_get('simple_exif_mappings', array());
+      // $field_mapping = array_flip($default_values);
+
+      foreach ($field_mapping as $key => $value) {
+        if (isset($form[$key]) && ($value != '_none')) {
+          // TODO: Fix this.
+          if ($form_id === 'file_entity_edit' && strstr($form['#entity']->filemime, "image")) {
+            if (!isset($form[$key][LANGUAGE_NONE][0]['#pre_render'])) {
+              $form[$key][LANGUAGE_NONE][0]['#pre_render'] = array();
+            }
+            array_unshift($form[$key][LANGUAGE_NONE][0]['#pre_render'], 'simple_exif_form_pre_render_file_entity_item');
+          }
+          else {
+            // The default value is not always under the 'value' key, find out
+            // where it should go.
+            if (isset($form[$key][LANGUAGE_NONE][0])) {
+              $form_element_keys = array_keys($form[$key][LANGUAGE_NONE][0]);
+              foreach ($form[$key][LANGUAGE_NONE][0]['#columns'] as $column) {
+                if ($column != 'format' && $column != 'summary' && in_array($column, $form_element_keys)) {
+                  if (empty($form[$key][LANGUAGE_NONE][0][$column]['#default_value'])) {
+                    _simple_exif_apply_value_to_field($form[$key][LANGUAGE_NONE][0][$column]['#default_value'], $exif->{$value}());
+                  }
+                }
+              }
+              if (in_array('#default_value', $form_element_keys) && empty($form[$key][LANGUAGE_NONE][0]['#default_value'])) {
+                _simple_exif_apply_value_to_field($form[$key][LANGUAGE_NONE][0]['#default_value'], $exif->{$value}());
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Sets the EXIF value for an individual field.
+ *
+ * @param $element
+ * @return $element
+ */
+function simple_exif_form_pre_render_file_entity_item($element) {
+  $exif = _simple_exif_read_exif_data($element['#entity']);
+  if ($exif !== FALSE) {
+    $field_mapping = variable_get('simple_exif_mappings', array());
+    if (isset($field_mapping[$element['#field_name']])) {
+      $value = $field_mapping[$element['#field_name']];
+      if ($value != '_none') {
+        if (empty($element['value']['#value'])) {
+          _simple_exif_apply_value_to_field($element['value']['#value'], $exif->{$value}());
+        }
+      }
+    }
+  }
+  return $element;
+}
+
+/**
+ * Ajax callback to update the field values on the fly.
+ */
+function simple_exif_update_form_values(&$form, &$form_state) {
+  $commands = array();
+  $exif = _simple_exif_read_exif_data($form['#entity']);
+  if ($exif !== FALSE) {
+    $field_mapping = variable_get('simple_exif_mappings', array());
+    foreach ($field_mapping as $key => $value) {
+      if (isset($form[$key]) && ($value != '_none')) {
+        if (empty($form[$key][LANGUAGE_NONE][0]['value']['#value'])) {
+          $form[$key][LANGUAGE_NONE][0]['value']['#value'] = $exif->{$value}();
+          $form_selector = '#edit-' . drupal_html_id($key);
+          $commands[] = ajax_command_replace($form_selector , drupal_render($form[$key]));
+        }
+      }
+    }
+  }
+
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Apply the supplied value to the form element.
+ *
+ * @param $element
+ * @param $value
+ */
+function _simple_exif_apply_value_to_field(&$element, $value) {
+  if (is_array($value)) {
+    $element = implode(', ', $value);
+  }
+  else {
+    $element = $value;
+  }
+}

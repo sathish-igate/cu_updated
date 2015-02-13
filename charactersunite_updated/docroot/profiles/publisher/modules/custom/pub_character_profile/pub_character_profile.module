@@ -1,0 +1,35 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Character Profile feature.
+ */
+
+include_once 'pub_character_profile.features.inc';
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_character_profile_form_character_profile_node_form_alter(&$form, &$form_state, $form_id) {
+  // Move additional information and character's information tabs to the top of
+  // the vertical tabs.
+  $form['#groups']['group_additional_information']->weight = -101;
+  $form['#groups']['group_characters_information']->weight = -102;
+
+  // Add form validation function
+  $form['#validate'][] = 'pub_character_profile_node_form_validate';
+}
+
+/**
+ * Validation function for the Character Profile node form.
+ * This will ensure that either a first name or last name is entered.
+ */
+function pub_character_profile_node_form_validate($form, &$form_state) {
+  $lang_first = $form['field_character_first_name']['#language'];
+  $lang_last = $form['field_character_last_name']['#language'];
+  
+  // If both first name and last name are empty, set an error on both fields.
+  if (empty($form_state['values']['field_character_first_name'][$lang_first][0]['value']) && empty($form_state['values']['field_character_last_name'][$lang_last][0]['value'])) {
+    form_set_error('field_character_first_name', t('You must enter at least a first name or last name for this character.'));
+    form_set_error('field_character_last_name', '');
+  }
+}

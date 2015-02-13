@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_contributor_profile
+ * module.
+ */
+
+/**
+ * Revert Feature on update.
+ */
+function pub_contributor_profile_update_7000() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_contributor_profile'));
+}

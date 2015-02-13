@@ -1,0 +1,10 @@
+#certify_form {
+  border-right: 1px solid #ccc;
+  float: left;
+  width: 30%;
+}
+
+#certify_log {
+  float: right;
+  width: 65%;
+}

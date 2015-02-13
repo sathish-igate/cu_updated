@@ -1,0 +1,14 @@
+<?php
+
+/**
+ * @file
+ *
+ * Install file for Publisher Movie Relationships.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_relationships_movie_uninstall() {
+  variable_del('pub_relationships_movie_content');
+}

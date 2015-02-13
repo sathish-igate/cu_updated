@@ -1,0 +1,8 @@
+name = Pub Users
+description = Functionality and configuration for Publisher users.
+core = 7.x
+package = Publisher
+version = 7.x-1.0
+dependencies[] = ctools
+dependencies[] = password_policy
+dependencies[] = email_login

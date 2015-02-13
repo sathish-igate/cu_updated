@@ -1,0 +1,111 @@
+<?php
+
+/**
+ * @file
+ * Tests for MPS related Block.
+ */
+class MPSBlockTestCase extends PublisherWebTestCase {
+  /**
+   * The admin user that will be created.
+   */
+  protected $admin;
+
+  /**
+   * @return array
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'MPS Blocks',
+      'description' => 'MPX blocks-related tests',
+      'group' => 'MPS',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('mps');
+  }
+
+  /**
+   * Test that an MPS block is properly saved when created.
+   */
+  public function testCreateBlock() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Create an MPS block via the UI.
+    // Make the block name different from the machine name.
+    $block_name = $this->randomName(8) . ' ' . $this->randomName(8);
+    $machine_name = strtolower(str_replace(' ', '_', $block_name));
+    $edit = array(
+      'block_name' => $block_name,
+      'machine_name' => $machine_name,
+    );
+    $this->drupalPost('admin/structure/mps_blocks/add', $edit, t('Save'));
+
+    // Assert that the new block has been saved, and that we're displaying the
+    // block name.
+    $this->drupalGet('admin/structure/mps_blocks');
+    $this->assertRaw($block_name, "The MPS block has been saved.");
+  }
+
+  /**
+   * Test that a created MPS block appears on a page.
+   */
+  public function testBlockOnPage() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Create a new MPS Block.
+    ctools_include('export');
+    $sample_block = new stdClass();
+    $sample_block->machine_name = $this->randomName(8);
+    $sample_block->block_name = $this->randomName(8);
+    $sample_block->export_type = NULL;
+    ctools_export_crud_save('mps_blocks', $sample_block);
+
+    // Set up the block in the header.
+    $edit = array();
+    $edit['blocks[mps_' . $sample_block->machine_name . '][region]'] = 'header';
+    $this->drupalPost('admin/structure/block', $edit, t('Save blocks'));
+
+    // Assert the block is on the page.
+    $this->drupalGet('<front>');
+    // Blocks delta must be lowercase.
+    $this->assertRaw('block-mps-' . strtolower($sample_block->machine_name), "The MPS block appears on the page.");
+
+    // Delete the MPS block and make sure it throws no errors.
+    ctools_export_crud_delete('mps_blocks', $sample_block);
+    // There should be no error (simpletest will fail otherwise, so no need
+    // to assert it).
+    $this->drupalGet('<front>');
+    $this->assertNoRaw('block-mps-' . strtolower($sample_block->machine_name), "The MPS block does not appear on the page.");
+  }
+
+  /**
+   * Retrieve the list of pre-defined ad blocks from MPS.
+   */
+  public function testRetrieveBlocks() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Use the sandbox environment for tests.
+    variable_set('mps_host', 'mps.io');
+    variable_set('mps_site_override', 'pub7-development');
+
+    $new_blocks = array();
+    $all_blocks = _mps_sync_ad_blocks();
+
+    if (is_array($all_blocks) && !empty($all_blocks['new'])) {
+      $new_blocks = $all_blocks['new'];
+    }
+
+    // If there were blocks returned from the request,...
+    if (count($new_blocks) > 0) {
+      $this->drupalGet('admin/structure/mps_blocks');
+      $this->assertRaw($new_blocks[0], "An MPS block has been retrieved and created.");
+    }
+  }
+}

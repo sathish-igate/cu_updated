@@ -1,0 +1,198 @@
+<?php
+
+/**
+ * @file
+ * Dynamic Queue Workbench moderation / State Machine integration.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function dynamic_queue_workbench_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'dynamic_queue_workbench') . '/views',
+  );
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function dynamic_queue_workbench_entity_info_alter(&$entity_info) {
+
+  // Add state_flow_information to the Dynamic Queue entity type.
+  if (!empty($entity_info['dynamic_queue'])) {
+    $entity_info['dynamic_queue']['state_flow_entity'] = array(
+      'revision_workflow_path' => 'dynamic-queue/%entity_id/revisions/%revision_id/workflow',
+      'revision_delete_path' => 'dynamic-queue/%entity_id/revisions/%revision_id/delete',
+      'revision_edit_path' => 'dynamic-queue/%entity_id/revisions/%revision_id/edit',
+    );
+  }
+}
+
+/**
+ * Implements hook_state_flow_entity_machine_type_alter().
+ */
+function dynamic_queue_state_flow_entity_machine_type_alter(&$machine_type, $entity, $entity_type) {
+  if ($entity_type == 'dynamic_queue') {
+    $machine_type = 'state_flow_dynamic_queue_workbench';
+  }
+}
+
+/**
+ * Implements hook_state_flow_entity_plugins().
+ */
+function dynamic_queue_workbench_state_flow_entity_plugins() {
+  $info = array();
+  $path = drupal_get_path('module', 'dynamic_queue_workbench') . '/plugins';
+
+  $workflow_options = array(
+    'states' => array(
+      'draft' => array('label' => t('Draft')),
+      'published' => array(
+        'label' => t('Published'),
+        'on_enter' => 'on_enter_published',
+        'on_exit' => 'on_exit_published',
+      ),
+      'unpublished' => array(
+        'label' => t('Unpublished'),
+        'on_enter' => 'on_enter_unpublished',
+      ),
+    ),
+    'events' => array(
+      'draft' => array(
+        'label' => t('Draft'),
+        'origin' => array('draft', 'published', 'unpublished'),
+        'target' => 'draft',
+      ),
+      'publish' => array(
+        'label' => t('Publish'),
+        'origin' => array('draft', 'unpublished', 'published'),
+        'target' => 'published',
+      ),
+      'unpublish' => array(
+        'label' => t('Unpublish'),
+        'origin' => 'published',
+        'target' => 'unpublished',
+        'permission' => 'publish and unpublish content',
+      ),
+    ),
+  );
+
+  $info['state_flow_dynamic_queue_workbench'] = array(
+    'handler' => array(
+      'class' => 'DynamicQueueStatesEntity',
+      'file' => 'dynamic_queue_state_machine.inc',
+      'path' => $path,
+      'parent' => 'state_flow_entity',
+      'workflow_options' => $workflow_options,
+      'entity_type' => 'dynamic_queue',
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function dynamic_queue_workbench_form_alter(&$form, &$form_state, $form_id) {
+
+  // Alter Dynamic Queue form.
+  if (stripos($form_id, 'dynamic_queue_edit') === 0 || $form_id === 'dynamic_queue_form') {
+    // Add the event form.
+    $dynamic_queue_entity = $form_state['dynamic_queue'];
+    $form_options = array(
+      'event_element_type' => 'select',
+    );
+
+    state_flow_entity_load_state_machine($dynamic_queue_entity, 'dynamic_queue');
+    module_load_include('inc', 'state_flow_entity', 'state_flow_entity.forms');
+
+    $form['options']['publishing']['state_flow']['#type'] = 'fieldset';
+    $form['options']['publishing']['state_flow'] += _state_flow_entity_events_revision(array(), $form_state, $dynamic_queue_entity, 'dynamic_queue', NULL, $form_options);
+    $form['options']['publishing']['state_flow']['event']['#title'] = t('Moderation State');
+    $form['options']['publishing']['status']['#default_value'] = 0;
+    $form['options']['publishing']['status']['#access'] = FALSE;
+    $form['options']['publishing']['revision']['default_revision']['#access'] = FALSE;
+
+    // Don't require the "Log message" field.
+    if (isset($form['options']['publishing']['state_flow']['event_comment'])) {
+      $form['options']['publishing']['state_flow']['event_comment']['#required'] = FALSE;
+    }
+
+    // If the user chooses the "Unpublish" Moderation State, disable the option
+    // for creating a new revision.
+    $form['options']['publishing']['revision']['is_new_revision']['#states'] = array(
+      'disabled' => array(
+        ':input[name="event"]' => array('value' => 'unpublish'),
+      ),
+      'unchecked' => array(
+        ':input[name="event"]' => array('value' => 'unpublish'),
+      ),
+    );
+  }
+
+  // Alter Scheduling form.
+  if ($form_id == 'revision_scheduler_add_form' && isset($form_state['build_info']['args'][1]->dqid)) {
+    $form['#submit'][] = 'dynamic_queue_revision_scheduler_add_form_submit';
+
+    $pattern = '/([.]*)\/schedule/i';
+    $cancel_action = $form['actions']['cancel']['#href'];
+
+    // If we haven't come from the Schedule table, redirect back to the
+    // Revisions table.
+    if (preg_match($pattern, $cancel_action, $matches) === 0) {
+      $entity_id = $form_state['build_info']['args'][1]->dqid;
+      $path = "dynamic-queue/$entity_id/revisions-state-flow-states";
+      $form['actions']['cancel']['#href'] = $path;
+    }
+  }
+}
+
+/**
+ * Additional form submission handler for revision_scheduler_add_form().
+ *
+ * Modifies the redirect for the Cancel button.
+ *
+ * @see dynamic_queue_workbench_form_alter()
+ */
+function dynamic_queue_revision_scheduler_add_form_submit($form, &$form_state) {
+  // Following submission of the form, redirect back to the revisions table.
+  $entity_id = $form_state['values']['entity_id'];
+  $path = "dynamic-queue/$entity_id/schedule";
+  $form_state['redirect'] = $path;
+  $form_state['complete form']['actions']['cancel']['#href'] = $path;
+  unset($_GET['destination']);
+}
+
+/**
+ * Implements hook_entity_revision_operation_info().
+ */
+function dynamic_queue_workbench_entity_revision_operation_info() {
+  $info = array();
+  $plugins = dynamic_queue_workbench_state_flow_entity_plugins();
+  $events = $plugins['state_flow_dynamic_queue_workbench']['handler']['workflow_options']['events'];
+  foreach ($events as $event_name => $event) {
+    $info['dynamic_queue']['dynamic_queue_workbench_' . $event_name] = array(
+      'label' => t('Moderate to @label', array('@label' => $event['label'])),
+      'access callback' => TRUE,
+      'callback' => 'dynamic_queue_workbench_revision_operation_process',
+    );
+  }
+  return $info;
+}
+
+/**
+ * Revision operation process callback for scheduled moderation state changes.
+ *
+ * @see dynamic_queue_workbench_entity_revision_operation_info()
+ */
+function dynamic_queue_workbench_revision_operation_process($entity, $operation) {
+  // Extract the transition "to state" from the operation key
+  // 'dynamic_queue_workbench_state'. Note strlen('dynamic_queue_workbench_') is
+  // 24.
+  $event = substr($operation->operation, 24);
+  $machine = state_flow_entity_load_state_machine($entity, 'dynamic_queue');
+  $machine->fire_event($event);
+}

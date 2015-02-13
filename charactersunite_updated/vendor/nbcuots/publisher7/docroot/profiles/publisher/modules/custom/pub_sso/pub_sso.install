@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ * Installation functions for the Publisher SSO module.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function pub_sso_requirements($phase) {
+  $requirements = array();
+  // Ensure translations don't break during installation.
+  $t = get_t();
+
+  $requirements['pub_sso'] = array(
+    'title' => $t('Publisher SSO'),
+    'description' => $t('Publisher SSO'),
+  );
+
+  if (!function_exists('pub_sso_get_cert_directory')) {
+    include_once 'pub_sso.module';
+  }
+
+  if (empty(pub_sso_get_cert_directory())) {
+    $requirements['pub_sso']['value'] = $t('Unable to find a directory that we can save the required certificate to.');
+    $requirements['pub_sso']['severity'] = REQUIREMENT_ERROR;
+  }
+  else {
+    $requirements['pub_sso']['value'] = $t('We have a directory we can save the certificate to.');
+    $requirements['pub_sso']['severity'] = REQUIREMENT_OK;
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_sso_uninstall() {
+  variable_del('pub_sso_roles_that_authenticate');
+  variable_del('pub_sso_server');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function pub_sso_enable() {
+  $cert_directory = pub_sso_get_cert_directory();
+  if ($cert_directory != FALSE && !file_exists($cert_directory)) {
+    drupal_mkdir($cert_directory, NULL, TRUE);
+  }
+
+  // Ensure user does not get locked out when this module is enabled.
+  pub_sso_update_7002();
+}
+
+/**
+ * Migrates variable from using role name to role id.
+ */
+function pub_sso_update_7001() {
+  $old_sso_roles = variable_get('pub_sso_roles_that_authenticate', array());
+  $user_roles = user_roles(TRUE);
+  $new_sso_roles = array();
+  foreach ($old_sso_roles as $role) {
+    if (!is_numeric($role)) {
+      // Map role name to role id.
+      $role_id = array_search($role, $user_roles);
+      if ($role_id !== FALSE) {
+        $new_sso_roles[$role_id] = $role_id;
+      }
+    }
+    else {
+      // No need to map as this is already role id.
+      $new_sso_roles[$role] = $role;
+    }
+  }
+  variable_set('pub_sso_roles_that_authenticate', $new_sso_roles);
+}
+
+/**
+ * Ensure user does not get locked out when Pub SSO module is enabled.
+ */
+function pub_sso_update_7002() {
+  variable_set('simplesamlphp_auth_allowdefaultlogin', 1);
+  variable_set('simplesamlphp_auth_allowdefaultloginusers', "");
+  variable_set('simplesamlphp_auth_allowdefaultloginroles', array(DRUPAL_AUTHENTICATED_RID => DRUPAL_AUTHENTICATED_RID));
+  variable_set('simplesamlphp_auth_registerusers', 0);
+
+}

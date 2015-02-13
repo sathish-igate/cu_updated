@@ -1,0 +1,7 @@
+name = Program Guide Example
+description = Example usage of the Program Guide module.
+package = Publisher
+core = 7.x
+version = 7.x-1.0
+
+dependencies[] = program_guide

@@ -1,0 +1,208 @@
+<?php
+
+/**
+ * @file
+ * Install file for Dynamic Queue.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dynamic_queue_schema() {
+  // Schema for dynamic_queue.
+  $schema['dynamic_queue'] = array(
+    'fields' => array(
+      'dqid' => array(
+        'description' => 'Primary Key: Unique dynamic queue ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'vid' => array(
+        'description' => 'The primary identifier for this version.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'type' => array(
+        'description' => 'The bundle of this dynamic queue.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'title' => array(
+        'description' => 'The human-readable name of this dynamic queue.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Boolean indicating whether this dynamic queue is published (visible to non-administrators).',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'settings' => array(
+        'description' => 'Serialized settings of this dynamic queue.',
+        'type' => 'blob',
+        'size' => 'big',
+        'serialize' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('dqid'),
+  );
+
+  // Schema for dynamic_queue_revision.
+  $schema['dynamic_queue_revision'] = array(
+    'fields' => array(
+      'dqid' => array(
+        'description' => 'Primary Key: Unique dynamic queue ID.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'vid' => array(
+        'description' => 'The primary identifier for this version.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'The bundle of this dynamic queue.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'title' => array(
+        'description' => 'The human-readable name of this dynamic queue.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'Boolean indicating whether this dynamic queue is published (visible to non-administrators).',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'settings' => array(
+        'description' => 'Serialized settings of this dynamic queue.',
+        'type' => 'blob',
+        'size' => 'big',
+        'serialize' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('vid'),
+
+  );
+
+  // Schema for dynamic_queue_type.
+  $schema['dynamic_queue_type'] = array(
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary Key: Unique dynamic queue type ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'The machine-readable name of this dynamic queue type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this dynamic queue type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_type' => array(
+        'description' => 'The entity type of this dynamic queue type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'cache_lifetime' => array(
+        'description' => 'The cache lifetime of this dynamic queue type.',
+        'type' => 'int',
+        'size' => 'medium',
+        'not null' => TRUE,
+        'default' => 86400,
+      ),
+      'settings' => array(
+        'description' => 'Serialized settings of this dynamic queue type.',
+        'type' => 'blob',
+        'size' => 'big',
+        'serialize' => TRUE,
+        'not null' => TRUE,
+      ),
+      'status' => array(
+        'description' => 'The exportable status of this dynamic queue type.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0x01,
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'type' => array('type'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dynamic_queue_uninstall() {
+  // Bypass entity_load() as we cannot use it here.
+  $types = db_select('dynamic_queue_type', 'dqt')
+    ->fields('dqt')
+    ->execute()
+    ->fetchAllAssoc('type');
+
+  foreach ($types as $name => $type) {
+    field_attach_delete_bundle('dynamic_queue', $name);
+  }
+
+  // Remove previously created variables.
+  $variables = db_query('SELECT name FROM {variable} WHERE name LIKE :name', array(':name' => 'dynamic_queue_%'))->fetchCol();
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Add cache_lifetime field to {dynamic_queue_type} table.
+ */
+function dynamic_queue_update_7200() {
+  if (!db_field_exists('dynamic_queue_type', 'cache_lifetime')) {
+    $column_spec = array(
+      'description' => 'The cache lifetime of this dynamic queue type.',
+      'type' => 'int',
+      'size' => 'medium',
+      'not null' => TRUE,
+      'default' => 86400,
+    );
+    db_add_field('dynamic_queue_type', 'cache_lifetime', $column_spec);
+  }
+}

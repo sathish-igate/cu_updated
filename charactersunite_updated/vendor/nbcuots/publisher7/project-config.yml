@@ -1,0 +1,13 @@
+---
+organization: NBCUOTS
+repository: Publisher7
+shortname: nbcupublisher7
+github_git_uri: git@github.com:NBCUOTS/Publisher7.git
+acquia_git_uri: nbcupublisher7@svn-6971.prod.hosting.acquia.com:nbcupublisher7.git
+pull_request:
+  domain: pr.publisher7.com
+  prefix: p7
+vars:
+  version_file: version.php
+  version_constant: PUBLISHER_VERSION
+

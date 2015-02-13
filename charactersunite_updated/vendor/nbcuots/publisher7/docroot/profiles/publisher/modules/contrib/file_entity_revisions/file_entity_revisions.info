@@ -1,0 +1,7 @@
+name = File entity Revisions
+description = "Extends file entity to be revision-able ."
+package = Media
+core = 7.x
+dependencies[] = file_entity
+dependencies[] = file_admin
+

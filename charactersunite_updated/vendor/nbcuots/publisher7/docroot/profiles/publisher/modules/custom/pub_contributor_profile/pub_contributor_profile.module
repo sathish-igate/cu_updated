@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Contributor Profile feature.
+ */
+
+include_once 'pub_contributor_profile.features.inc';

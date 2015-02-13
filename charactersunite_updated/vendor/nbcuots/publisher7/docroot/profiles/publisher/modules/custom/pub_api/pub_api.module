@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * @file
+ * Code for the pub_api module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function pub_api_menu() {
+  $items = array();
+
+  $items['admin/structure/services/publisher'] = array(
+    'title' => 'Publisher Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_api_settings'),
+    'access arguments' => array('administer services'),
+    'file' => 'pub_api.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function pub_api_flush_caches() {
+  return array('cache_pub_api');
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function pub_api_entity_update($entity, $type) {
+  // After updating an entity clear the API's cache for all the resources.
+  pub_api_clear_cache_all_resources($type, $entity);
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function pub_api_entity_delete($entity, $type) {
+  // After deleting an entity clear the API's cache.
+  pub_api_clear_cache_all_resources($type, $entity);
+}
+
+/**
+ * Implements hook_rest_server_request_parsers_alter().
+ */
+function pub_api_rest_server_request_parsers_alter(&$parsers) {
+  $header = pub_api_get_header();
+  $parsers[$header] = 'PubServer::parseJSON';
+}
+
+/**
+ * Implements hook_rest_server_response_formatters_alter().
+ */
+function pub_api_rest_server_response_formatters_alter(&$formatters) {
+  $header = pub_api_get_header();
+  $formatters[$header] = array(
+    'mime types' => array($header),
+    'formatter class' => 'PubServerJSONFormatter',
+  );
+}
+
+/**
+ * Helper function to return the site's accept header.
+ */
+function pub_api_get_header() {
+  $header = variable_get('pub_api_accept_header', 'application/json');
+  $version = variable_get('pub_api_version');
+  if (isset($version)) {
+    $header = sprintf($header, $version);
+  }
+
+  return $header;
+}
+
+/**
+ * Helper function to remove all caches for a given entity for all resources.
+ *
+ * @param string $type
+ *   The entity type.
+ * @param object $entity
+ *   The entity object.
+ */
+function pub_api_clear_cache_all_resources($type, $entity) {
+  // Get a list of all resource classes.
+  foreach (PubAPIResource::getResourceClasses() as $class_name) {
+    // @var PubAPIResource $resource
+    $resource = new $class_name();
+    // Use the custom cache clear method for every resource.
+    $resource->cacheClear($type, $entity);
+  }
+}

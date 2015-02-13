@@ -1,0 +1,42 @@
+<?php
+/**
+ * @file
+ * Pub Quiz module.
+ */
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_quiz_menu_alter(&$items) {
+  // The Quiz form settings is broken in Quiz module 5.0-alpha2
+  // @TODO: If it is fixed in Quiz module, the following lines can be removed.
+  if (isset($items['admin/quiz/settings/quiz_form'])) {
+    unset($items['admin/quiz/settings/quiz_form']);
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ *
+ * @todo Remove this function once PR 1497 is merged.
+ */
+function pub_quiz_module_implements_alter(&$implementations, $hook) {
+  // Move our version of hook_presave to the end so we can modify the revision
+  // logic.
+  if ($hook == 'node_presave') {
+    $group = $implementations['pub_quiz'];
+    unset($implementations['pub_quiz']);
+    $implementations['pub_quiz'] = $group;
+  }
+}
+
+/**
+ * Implements hook_node_presave().
+ *
+ * @todo Remove this function once PR 1497 is merged.
+ */
+function pub_quiz_node_presave($node) {
+  if ($node->type == 'quiz') {
+    $node->revision = 1;
+  }
+}

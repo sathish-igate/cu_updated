@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * @file
+ * Installation functions for Logo module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function logo_install() {
+  $t = get_t();
+
+  // Create a logo upload field.
+  if (field_read_field('field_logo') === FALSE) {
+    $field = array(
+      'field_name' => 'field_logo',
+      'type' => 'image',
+      'cardinality' => 1,
+    );
+    field_create_field($field);
+  }
+
+  // Create an instance to the above field.
+  $instance = array(
+    'field_name' => 'field_logo',
+    'label' => $t('Upload logo'),
+    'required' => TRUE,
+    'widget' => array(
+      'type' => 'image_image',
+    ),
+  );
+  $instance['entity_type'] = 'logo';
+  $instance['bundle'] = 'logo';
+  field_create_instance($instance);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function logo_uninstall() {
+  field_delete_field('field_logo');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function logo_schema() {
+  $schema['logo'] = array(
+    'description' => 'Stores meta data needed to schedule logos for display.',
+    'fields' => array(
+      'lid' => array(
+        'description' => 'Unique logo id.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'Title of the logo.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'start' => array(
+        'description' => 'Date on which to display the logo.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'end' => array(
+        'description' => 'Date on which this logo should stop displaying.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('lid'),
+  );
+  return $schema;
+}

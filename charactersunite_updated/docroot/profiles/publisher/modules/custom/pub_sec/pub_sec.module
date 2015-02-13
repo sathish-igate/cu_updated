@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * @file
+ * Disable certain functionality for security purposes.
+ */
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_sec_menu_alter(&$items) {
+  if (module_exists('media') && variable_get('pub_sec_disable_file_import', TRUE)) {
+    // Do not allow importing from local system.
+    unset($items['admin/content/file/import']);
+  }
+
+  if (isset($items['admin/views/ajax/autocomplete/user'])) {
+    // Do not allow non-admin users access to user autocomplete.
+    $items['admin/views/ajax/autocomplete/user']['access arguments'] = array('administer site configuration');
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_sec_form_redirect_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Do not allow external redirects.
+  if (variable_get('pub_sec_disable_external_redirect', TRUE)) {
+    $form['#validate'][] = 'pub_sec_redirect_edit_form_validate';
+  }
+}
+
+/**
+ * Form validation handler for redirect_edit_form().
+ *
+ * @todo Patch for redirect module?
+ *
+ * @see pub_sec_form_redirect_edit_form_alter()
+ */
+function pub_sec_redirect_edit_form_validate($form, &$form_state) {
+  $url = $form_state['redirect'];
+  if (url_is_external($url)) {
+    form_set_error('redirect', t('External URLs are not allowed'));
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_sec_form_user_login_alter(&$form, &$form_state, $form_id) {
+  if (variable_get('pub_sec_disable_user_login_autocomplete', TRUE)) {
+    $form['#attributes']['autocomplete'] = 'off';
+  }
+}

@@ -1,0 +1,187 @@
+<?php
+
+/**
+ * @file
+ * Define the WYSIWYG browser plugin.
+ */
+
+/**
+ * Implements WYSIWYG's hook_wysiwyg_plugin().
+ */
+function pub_wysiwyg_wysiwyg_plugin($editor, $version) {
+  switch ($editor) {
+    case 'ckeditor':
+      $plugins = array();
+      if ($version > 3) {
+        $plugins['youtube'] = array(
+          'url' => 'http://github.com/NBCUOTS/Publisher7',
+          'path' => drupal_get_path('module', 'pub_wysiwyg') . '/plugins/youtube',
+          'filename' => 'plugin.js',
+          'buttons' => array(
+            'Youtube' => t('Youtube'),
+          ),
+          'load' => TRUE,
+          'internal' => FALSE,
+        );
+      }
+      if ($version > 4 && module_exists('pub_mpx')) {
+        $plugins['mpx'] = array(
+          'url' => 'http://github.com/NBCUOTS/Publisher7',
+          'path' => drupal_get_path('module', 'pub_wysiwyg') . '/plugins/mpx',
+          'filename' => 'plugin.js',
+          'buttons' => array(
+            'MPX' => t('MPX'),
+          ),
+          'load' => TRUE,
+          'internal' => FALSE,
+        );
+      }
+      return $plugins;
+  }
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function pub_wysiwyg_filter_info() {
+  $filters = array();
+
+  $filters['pub_wysiwyg_youtube'] = array(
+    'title' => t('Publisher youtube formatter'),
+    'description' => t("Allows <youtube> tag to indicate youtube embed video."),
+    'process callback' => '_pub_wysiwyg_youtube_filter_process',
+    'tips callback' => 'pub_wysiwyg_filter_tips',
+    'cache' => FALSE,
+  );
+  if (module_exists('pub_mpx')) {
+    $filters['pub_wysiwyg_mpx'] = array(
+      'title' => t('Publisher mpx video formatter'),
+      'description' => t('Allows embedding mpx videos via <mpx> tags.'),
+      'process callback' => '_pub_wysiwyg_mpx_filter_process',
+      'tips callback' => 'pub_wysiwyg_filter_tips',
+      'cache' => FALSE,
+    );
+  }
+
+  return $filters;
+}
+
+/**
+ * Process callback for pub_wysiwyg_youtube.
+ *
+ * Turns a <youtube> tag into an iframe embed.
+ *
+ * @param string $text
+ *   Text to be filtered.
+ * @param object $filter
+ *   Filter object.
+ *
+ * @return string
+ *   Returns the filtered text.
+ *
+ * @see pub_wysiwyg_filter_info
+ */
+function _pub_wysiwyg_youtube_filter_process($text, $filter) {
+  $matches = NULL;
+  preg_match_all('|<youtube .*?</youtube>|', $text, $matches);
+
+  if (empty($matches[0])) {
+    return $text;
+  }
+
+  $unique_matches = array_unique($matches[0]);
+
+  foreach ($unique_matches as $match) {
+    // CKEditor inserts a <br> tag inside the mpx element that throws off 
+    // SimpleXML.  Remove it to avoid these problems.
+    $clean_match = str_replace('<br>', '', $match);
+    $element = new SimpleXMLElement($clean_match);
+    $attributes = array();
+    foreach ($element->attributes() as $name => $value) {
+      $attributes[$name] = (string)$value;
+    }
+    if (empty($attributes['src'])) {
+      continue;
+    }
+    // Extract the video id from the URL.
+    // @author: Stephan Schmitz <eyecatchup@gmail.com>
+    // @url: http://stackoverflow.com/a/10315969/624466
+    $video_id_match = NULL;
+    preg_match('/^(?:https?:\/\/)?(?:www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/', $attributes['src'], $video_id_match);
+    if (empty($video_id_match[1])) {
+      continue;
+    }
+    $attributes['width'] = $attributes['width'] ? $attributes['width'] : 640;
+    $attributes['height'] = $attributes['height'] ? $attributes['height'] : 360;
+    $iframe_html = '<div class="google-youtube-wrapper"><iframe class="google-youtube-iframe" src="//youtube.com/embed/' . $video_id_match[1] . '" width="' . $attributes['width'] . '" height="' . $attributes['height'] . '"></iframe></div>';
+    $text = str_replace($match, $iframe_html, $text);
+  }
+
+  return $text;
+}
+
+/**
+ * Process callback for pub_wysiwyg_mpx.
+ *
+ * Turns an <mpx> tag into an iframe embed.
+ *
+ * @param string $text
+ *   Text to be filtered.
+ * @param object $filter
+ *   Filter object.
+ *
+ * @return string
+ *   Returns the filtered text.
+ *
+ * @see pub_wysiwyg_filter_info
+ */
+function _pub_wysiwyg_mpx_filter_process($text, $filter) {
+  $matches = NULL;
+  preg_match_all('|<mpx .*?</mpx>|', $text, $matches);
+
+  if (empty($matches[0])) {
+    return $text;
+  }
+
+  $unique_matches = array_unique($matches[0]);
+
+  foreach ($unique_matches as $match) {
+    // CKEditor inserts a <br> tag inside the mpx element that throws off 
+    // SimpleXML.  Remove it to avoid these problems.
+    $clean_match = str_replace('<br>', '', $match);
+    $element = new SimpleXMLElement($clean_match);
+    $attributes = array();
+    foreach ($element->attributes() as $name => $value) {
+      $attributes[$name] = (string)$value;
+    }
+    if (empty($attributes['url'])) {
+      continue;
+    }
+    $iframe_src = $iframe_url = _pub_mpx_file_url_to_iframe_url($attributes['url']);
+    if (!$iframe_src) {
+      continue;
+    }
+    $attributes['width'] = $attributes['width'] ? $attributes['width'] : 640;
+    $attributes['height'] = $attributes['height'] ? $attributes['height'] : 360;
+    $iframe_html = '<iframe class="mpx-video-iframe" src="' . $iframe_src . '" width="' . $attributes['width'] . '" height="' . $attributes['height'] . '"></iframe>';
+    $text = str_replace($match, $iframe_html, $text);
+  }
+
+  return $text;
+}
+
+/**
+ * Implements hook_form_wysiwyg_profile_form_alter().
+ */
+function pub_wysiwyg_form_wysiwyg_profile_form_alter($form, $form_state) {
+  if (isset($form['format']['#value']) && $form['format']['#value'] == 'publisher' 
+      && isset($form['editor']['#value']) && $form['editor']['#value'] == 'ckeditor' 
+      && !module_exists('pub_mpx')) {
+    $message = t('If you would like to embed mpx videos via wysiwyg editor, enable the "Pub MPX" module.  Then go to the !publisher_text_format_link and enable "Publisher mpx video formatter" and add "!tag" to the "Allowed HTML tags" field.',
+      array(
+        '!publisher_text_format_link' => l('Publisher text format edit page', 'admin/config/content/formats/publisher'),
+        '!tag' => '<mpx>',
+      ));
+    drupal_set_message($message, 'warning');
+  }
+}

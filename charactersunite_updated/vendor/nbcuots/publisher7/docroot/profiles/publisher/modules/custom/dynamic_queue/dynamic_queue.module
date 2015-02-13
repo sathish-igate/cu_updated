@@ -1,0 +1,464 @@
+<?php
+
+/**
+ * @file
+ * Module file for Dynamic Queue.
+ */
+
+// Load our classes and helper functions.
+// Yes we just blatantly load them because entity api
+// is being silly.
+include_once 'dynamic_queue.entity.inc';
+include_once 'dynamic_queue.type.entity.inc';
+include_once 'dynamic_queue.admin.inc';
+include_once 'dynamic_queue.class.inc';
+
+/**
+ * Implements hook_views_api().
+ */
+function dynamic_queue_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'dynamic_queue') . '/views',
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function dynamic_queue_permission() {
+  $permissions = array(
+    'access dynamic queues' => array(
+      'title' => t('View published Dynamic Queues'),
+    ),
+    'administer dynamic queue types' => array(
+      'title' => t('Administer Dynamic Queue types'),
+      'description' => t('Create, Edit and Delete Dynamic Queue types.'),
+    ),
+    'administer dynamic queues' => array(
+      'title' => t('Administer Dynamic Queues'),
+      'description' => t('Create, Edit and Delete Dynamic Queues.'),
+    ),
+  );
+
+  // Define permissions per dynamic queue type.
+  foreach (dynamic_queue_type_get_types() as $type) {
+    $type_name = check_plain($type->type);
+    $permissions += array(
+      "create $type_name dynamic queue" => array(
+        'title' => t('%type_name: Create dynamic queue', array('%type_name' => $type->label)),
+      ),
+      "edit any $type_name dynamic queue" => array(
+        'title' => t('%type_name: Edit any dynamic queue', array('%type_name' => $type->label)),
+      ),
+      "delete any $type_name dynamic queue" => array(
+        'title' => t('%type_name: Delete any dynamic queue', array('%type_name' => $type->label)),
+      ),
+    );
+  }
+
+  return $permissions;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function dynamic_queue_entity_info() {
+  $info = array(
+    'dynamic_queue' => array(
+      'label' => t('Dynamic Queue'),
+      'plural label' => t('Dynamic Queues'),
+      'entity class' => 'DynamicQueueEntity',
+      'controller class' => 'DynamicQueueEntityController',
+      'base table' => 'dynamic_queue',
+      'revision table' => 'dynamic_queue_revision',
+      'fieldable' => TRUE,
+      'entity keys' => array(
+        'id' => 'dqid',
+        'bundle' => 'type',
+        'revision' => 'vid',
+        'label' => 'title',
+      ),
+      'bundles' => array(),
+      'bundle keys' => array(
+        'bundle' => 'type',
+      ),
+      'label callback' => 'entity_class_label',
+      'uri callback' => 'entity_class_uri',
+      'access callback' => 'dynamic_queue_access',
+      'module' => 'dynamic_queue',
+      'view modes' => array(
+        'full' => array(
+          'label' => t('Full content'),
+          'custom settings' => FALSE,
+        ),
+        'teaser' => array(
+          'label' => t('Teaser'),
+          'custom settings' => TRUE,
+        ),
+      ),
+      'admin ui' => array(
+        'path' => 'admin/content/dynamic-queue',
+        'controller class' => 'DynamicQueueEntityUIController',
+      ),
+      'previewable' => TRUE,
+    ),
+    'dynamic_queue_type' => array(
+      'label' => t('Dynamic Queue type'),
+      'plural label' => t('Dynamic Queue types'),
+      'entity class' => 'DynamicQueueEntityType',
+      'controller class' => 'EntityAPIControllerExportable',
+      'base table' => 'dynamic_queue_type',
+      'fieldable' => FALSE,
+      'bundle of' => 'dynamic_queue',
+      'exportable' => TRUE,
+      'entity keys' => array(
+        'id' => 'id',
+        'name' => 'type',
+      ),
+      'module' => 'dynamic_queue',
+      'label callback' => 'entity_class_label',
+      'access callback' => 'dynamic_queue_type_access',
+      'admin ui' => array(
+        'path' => 'admin/structure/dynamic-queue',
+      ),
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function dynamic_queue_field_extra_fields() {
+  $extra = array();
+  foreach (dynamic_queue_type_get_types() as $bundle) {
+    $extra['dynamic_queue'][$bundle->type] = array(
+      'display' => array(
+        'entity_list' => array(
+          'label' => t('Entity List'),
+          'description' => t('The resulting list of entities based on the query set by the editor.'),
+          'weight' => 0,
+        ),
+      ),
+      'form' => array(
+        'settings' => array(
+          'label' => t('Entity list settings'),
+          'description' => t('Settings for entity list query.'),
+          'weight' => 0,
+        ),
+      ),
+    );
+  }
+
+  return $extra;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function dynamic_queue_admin_paths() {
+  $paths = array(
+    'dynamic-queue/*/edit' => TRUE,
+    'dynamic-queue/*/clone' => TRUE,
+    'dynamic-queue/*/revisions-state-flow-states' => TRUE,
+    'dynamic-queue/*/revisions/*/edit' => TRUE,
+    'dynamic-queue/*/revisions/*/delete' => TRUE,
+    'dynamic-queue/*/revisions/*/workflow' => TRUE,
+    'dynamic-queue/*/schedule' => TRUE,
+    'dynamic-queue/*/schedule/add' => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function dynamic_queue_form_field_ui_display_overview_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['fields']['entity_list']['format']['type']['#options'])) {
+    // Get the view modes of the entity_type (i.e. node) that this
+    // dynamic queue type references.
+    $bundle = $form['#bundle'];
+    $view_mode = $form['#view_mode'];
+    $type = dynamic_queue_type_get_types($bundle);
+    $entity_info = entity_get_info($type->entity_type);
+
+    $view_modes = array();
+    foreach ($entity_info['view modes'] as $key => $value) {
+      $view_modes[$key] = $value['label'];
+    }
+
+    $form['fields']['entity_list']['format']['type']['#options'] = $view_modes;
+    $form['fields']['entity_list']['format']['type']['#default_value'] = variable_get('dynamic_queue_' . $bundle . '_' . $view_mode . '_entity_list_view_mode', 'default');
+    $form['#submit'][] = 'dynamic_queue_field_ui_save';
+  }
+}
+
+/**
+ * Additional submission handler for field_ui_display_overview_form.
+ *
+ * @see dynamic_queue_form_field_ui_display_overview_form_alter()
+ */
+function dynamic_queue_field_ui_save($form, &$form_state) {
+  $bundle = $form['#bundle'];
+  $view_mode = $form['#view_mode'];
+  variable_set('dynamic_queue_' . $bundle . '_' . $view_mode . '_entity_list_view_mode', $form_state['values']['fields']['entity_list']['type']);
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * We are adding the info about the dynamic_queue_type types.
+ */
+function dynamic_queue_entity_info_alter(&$entity_info) {
+  foreach (dynamic_queue_type_get_types() as $type => $info) {
+    $entity_info['dynamic_queue']['bundles'][$type] = array(
+      'label' => $info->label,
+      'admin' => array(
+        'path' => 'admin/structure/dynamic-queue/manage/%dynamic_queue_type',
+        'real path' => 'admin/structure/dynamic-queue/manage/' . $type,
+        'bundle argument' => 4,
+        'access arguments' => array('administer dynamic queue types'),
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dynamic_queue_menu() {
+  $items = array();
+
+  if (module_exists('revision_scheduler')) {
+    $items['dynamic-queue/%dynamic_queue/schedule'] = array(
+      'title' => 'Schedule',
+      'page callback' => 'revision_scheduler_list_page',
+      'page arguments' => array('dynamic_queue', 1),
+      'access arguments' => array('schedule revisions'),
+      'file' => 'revision_scheduler.pages.inc',
+      'file path' => drupal_get_path('module', 'revision_scheduler'),
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 20,
+    );
+    $items['dynamic-queue/%dynamic_queue/schedule/add'] = array(
+      'title' => 'Add scheduled revision',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array(
+        'revision_scheduler_add_form',
+        'dynamic_queue',
+        1,
+      ),
+      'access arguments' => array('schedule revisions'),
+      'file' => '/revision_scheduler.pages.inc',
+      'file path' => drupal_get_path('module', 'revision_scheduler'),
+      'type' => MENU_LOCAL_ACTION,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_entity_revision_operation_info().
+ */
+function dynamic_queue_entity_revision_operation_info() {
+  $operations['dynamic_queue']['revert'] = array(
+    'label' => t('Revert'),
+    'access arguments' => array('revert revisions'),
+    'callback' => 'dynamic_queue_revision_operation_revert',
+  );
+  $operations['dynamic_queue']['delete'] = array(
+    'label' => t('Delete'),
+    'access arguments' => array('delete revisions'),
+    'callback' => 'dynamic_queue_revision_operation_delete',
+  );
+
+  return $operations;
+}
+
+/**
+ * Dynamic Queue revision operation callback: revert to revision.
+ */
+function dynamic_queue_revision_operation_revert($dynamic_queue) {
+  entity_revision_set_default('dynamic_queue', $dynamic_queue);
+  $dynamic_queue->save();
+}
+
+/**
+ * Dynamic Queue revision operation callback: delete revision.
+ */
+function dynamic_queue_revision_operation_delete($dynamic_queue) {
+  entity_delete('dynamic_queue', $dynamic_queue->dqid);
+}
+
+/**
+ * Implements hook_ctools_plugin_type().
+ */
+function dynamic_queue_ctools_plugin_type() {
+  // Plugin for query alterations.
+  $plugins['modifier'] = array(
+    'classes' => array('handler'),
+  );
+
+  return $plugins;
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function dynamic_queue_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'dynamic_queue' && $plugin_type == 'modifier') {
+    return "plugins/modifier";
+  }
+}
+
+/**
+ * Fetches modifier plugin by name.
+ *
+ * @param string $modifier
+ *   Name of the modifier plugin to retrieve.
+ *
+ * @return array
+ *   An array with information about the modifier plugin.
+ */
+function dynamic_queue_get_modifier($modifier) {
+  ctools_include('plugins');
+  return ctools_get_plugins('dynamic_queue', 'modifier', $modifier);
+}
+
+/**
+ * Fetch metadata for all modifier plugins.
+ *
+ * @return array
+ *   An array of arrays with information about all available modifiers.
+ */
+function dynamic_queue_get_modifiers() {
+  ctools_include('plugins');
+  return ctools_get_plugins('dynamic_queue', 'modifier');
+}
+
+/**
+ * Determines whether the given user has access to a dynamic queue.
+ *
+ * @param string $op
+ *   The operation being performed. One of 'edit', 'create', 'delete'.
+ * @param DynamicQueueEntity $dynamic_queue
+ *   Optionally a dynamic queue or a dynamic queue type to check access for.
+ *   If nothing is given, access for all dynamic queues is determined.
+ * @param object $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return bool
+ *   Whether access is allowed or not.
+ */
+function dynamic_queue_access($op = 'edit', $dynamic_queue = NULL, $account = NULL) {
+  if (user_access('administer dynamic queues', $account)) {
+    return TRUE;
+  }
+
+  if ($op == 'view' && user_access('access dynamic queues', $account) && $dynamic_queue->status) {
+    return TRUE;
+  }
+
+  $access = FALSE;
+  if (isset($dynamic_queue) && $type_name = $dynamic_queue->type) {
+    switch ($op) {
+      case 'create':
+        $access = user_access("create $type_name dynamic queue", $account);
+        break;
+
+      case 'edit':
+        $access = user_access("edit any $type_name dynamic queue", $account);
+        break;
+
+      case 'delete':
+        $access = user_access("delete any $type_name dynamic queue", $account);
+        break;
+    }
+  }
+
+  return $access;
+}
+
+/**
+ * Access callback for the entity API.
+ *
+ * @see dynamic_queue_entity_info()
+ */
+function dynamic_queue_type_access($op, $type = NULL, $account = NULL) {
+  return user_access('administer dynamic queue types', $account);
+}
+
+/**
+ * Loads a dynamic queue entity.
+ *
+ * @param int $dqid
+ *   The id of the dynamic queue entity to load.
+ * @param bool $reset
+ *   If set to TRUE, the cache is cleared before loading.
+ *
+ * @return DynamicQueueEntity
+ *   The dynamic queue entity object.
+ */
+function dynamic_queue_load($dqid, $reset = FALSE) {
+  $entities = entity_load('dynamic_queue', array($dqid), array(), $reset);
+
+  return !empty($entities) ? $entities[$dqid] : NULL;
+}
+
+/**
+ * Creates and returns the cache ID for the dynamic queue.
+ *
+ * @param DynamicQueueEntity $entity
+ *   The dynamic queue entity.
+ * @param int $revision_id
+ *   The particular revision of the dynamic queue entity.
+ * @param bool $base
+ *   Optional. Whether or not to return the base ID. Defaults to FALSE. This is
+ *   useful for clearing all caches associated with a dynamic queue.
+ *
+ * @return string
+ *   The string containing the dynamic queue cache ID.
+ */
+function dynamic_queue_cache_id($entity, $revision_id = NULL, $base = FALSE) {
+  $cache_id = 'dynamic_queue:' . $entity->dqid;
+
+  if ($base) {
+    return $cache_id;
+  }
+
+  // Set this placeholder even if revision ID is NULL, so we always know which
+  // ID is in which place (so for example user ID will not get confused with
+  // revision, etc).
+  $cache_id .= ':' . $revision_id;
+
+  // Caching per user closes potential security holes opened by caching without
+  // this check. Otherwise, user A (who can access entity X) builds the cache
+  // with entity X in the list - and then user B (who can not access entity X)
+  // would also see it. Adding the user ID prevents this.
+  global $user;
+  $cache_id .= ':' . $user->uid;
+
+  // Caching per page avoids breaking the pager.
+  $cache_id .= ':' . pager_find_page();
+
+  return $cache_id;
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update().
+ */
+function dynamic_queue_dynamic_queue_update($entity) {
+  $base_id = dynamic_queue_cache_id($entity, NULL, TRUE);
+
+  // Get all cache IDs matching our base ID.
+  $cids = db_select('cache', 'c')
+    ->fields('c', array('cid'))
+    ->condition('cid', db_like($base_id) . '%', 'LIKE')
+    ->execute()
+    ->fetchCol();
+
+  cache_clear_all($cids, 'cache');
+}

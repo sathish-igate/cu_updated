@@ -1,0 +1,284 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Editorial feature.
+ */
+
+include_once 'pub_editorial.features.inc';
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_editorial_menu_alter(&$items) {
+  // Unset the node/%/revisions revision path.
+  if (isset($items['node/%node/revisions'])) {
+    $items['node/%node/revisions']['page callback'] = 'pub_editorial_revision_workflow_redirect';
+    $items['node/%node/revisions']['type'] = MENU_CALLBACK;
+    $items['node/%node/revisions']['access callback'] = '_node_revision_access';
+    $items['node/%node/revisions']['access argument'] = array(1);
+  }
+}
+
+/**
+ * Re-direct to node/%node/workflow.
+ */
+function pub_editorial_revision_workflow_redirect($node) {
+  if (isset($node->nid)) {
+    $path = "node/{$node->nid}/revisions-state-flow-states";
+    drupal_goto($path, array(), 301);
+  }
+  else {
+    drupal_not_found();
+  }
+}
+
+/**
+ * Create the pub_state_flow date type.
+ */
+function pub_editorial_date_format_types() {
+  return array(
+    'edit_date'  => t('Edit Date'),
+  );
+}
+
+/**
+ * Implements hook_date_formats().
+ */
+function pub_editorial_date_formats() {
+  $formats = array();
+
+  $formats[] = array(
+    'type'    => 'edit_date',
+    'format'  => 'm/d/Y - h:i A',
+    'locales' => array(),
+  );
+
+  // Save the new date formats into variables.
+  foreach ($formats as $format) {
+    variable_set('date_format_' . $format['type'], $format['format']);
+  }
+
+  return $formats;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function pub_editorial_form_alter(&$form, &$form_state, $form_id) {
+
+  // Leave if this isn't an entity edit form, doesn't have a path form field, or
+  // if the form doesn't contain entity type and entity data.
+  if (strpos($form_id, '_entity_edit') === FALSE || empty($form['path']) ||
+      empty($form['#entity_type']) || empty($form['#entity'])) {
+    return;
+  }
+
+  $entity_uri = entity_uri($form['#entity_type'], $form['#entity']);
+
+  if (empty($entity_uri['path'])) {
+    return;
+  }
+
+  $existing_url_aliases = db_query('SELECT pid, alias FROM {url_alias} WHERE source = :source ORDER BY pid ASC',
+      array(':source' => $entity_uri['path']))
+    ->fetchAllKeyed();
+
+  // Remove last (current) alias.
+  $current_alias = array_pop($existing_url_aliases);
+
+  if (!empty($existing_url_aliases)) {
+
+    // Display the additional aliases to the editor.
+    $form['path']['existing_aliases']['#markup'] = '';
+    $form['path']['existing_aliases']['#markup'] .= '<div class="existing-aliases">';
+    $form['path']['existing_aliases']['#markup'] .= '<p><strong>' . t('Additional aliases exist for this content item.') . '</strong></p>';
+    $form['path']['existing_aliases']['#markup'] .= '<ul>';
+    foreach ($existing_url_aliases as $pid => $alias) {
+      $form['path']['existing_aliases']['#markup'] .= '<li class="existing-alias">' . $alias . '</li>';
+    }
+    $form['path']['existing_aliases']['#markup'] .= '</ul>';
+    $redirect_admin_link = l(t('Click here'), 'admin/config/search/path');
+    $form['path']['existing_aliases']['#markup'] .= '<p>' . t('!admin_link to edit or delete.', array('!admin_link' => $redirect_admin_link)) . '</p>';
+    $form['path']['existing_aliases']['#markup'] .= '</div>';
+
+    // The path module displays the wrong alias in the form field.  It displays
+    // the oldest alias (lowest pid) instead of the newest alias (highest pid)
+    // which is used for determining an entity's alias. This fixes that.
+    $form['path']['alias']['#default_value'] = $current_alias;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_editorial_form_file_entity_edit_alter(&$form, &$form_state, $form_id) {
+  // Override default vertical tab name and options provided by the File Admin
+  // module.
+  $form['options']['#title'] = 'Publishing options';
+  $form['options']['promote']['#access'] = FALSE;
+  $form['options']['sticky']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_editorial_form_file_entity_add_upload_alter(&$form, &$form_state, $form_id) {
+  // Override default vertical tab name and options provided by the File Admin
+  // module.
+  $form['options']['#title'] = 'Publishing options';
+  $form['options']['promote']['#access'] = FALSE;
+  $form['options']['sticky']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_editorial_form_file_entity_file_type_form_alter(&$form, &$form_state, $form_id) {
+  // Override default options provided by the File Admin module.
+  unset($form['workflow']['file_options']['#options']['sticky']);
+  unset($form['workflow']['file_options']['#options']['promote']);
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function pub_editorial_entity_presave($entity, $type) {
+
+  // If the redirect module is installed, do some cleaning up - create redirects
+  // for old url aliases, and then delete them.
+  if (!module_exists('redirect') || !redirect_entity_type_supports_redirects($type)) {
+    return;
+  }
+
+  // Only do cleaning up for already existing entities, not new ones.
+  $entity_type_info = entity_get_info($type);
+  if (empty($entity->{$entity_type_info['entity keys']['id']})) {
+    return;
+  }
+
+  $entity_uri = entity_uri($type, $entity);
+
+  if (empty($entity_uri['path'])) {
+    return;
+  }
+
+  $existing_url_aliases = db_query('SELECT pid, alias FROM {url_alias} WHERE source = :source ORDER BY pid ASC',
+      array(':source' => $entity_uri['path']))
+    ->fetchAllKeyed();
+
+  // Remove last (current) alias.
+  $current_alias = array_pop($existing_url_aliases);
+
+  if (empty($existing_url_aliases)) {
+    return;
+  }
+
+  $langcode = entity_language($type, $entity);
+  $langcode = $langcode ? $langcode : LANGUAGE_NONE;
+
+  foreach ($existing_url_aliases as $pid => $alias) {
+    $redirect = new stdClass();
+    redirect_object_prepare($redirect);
+    $redirect->source = $alias;
+    $redirect->redirect = $entity_uri['path'];
+    $redirect->language = $langcode;
+    // Check if the redirect exists before saving.
+    $hash = redirect_hash($redirect);
+    if (!redirect_load_by_hash($hash)) {
+      redirect_save($redirect);
+    }
+  }
+
+  db_delete('url_alias')
+    ->condition('pid', array_keys($existing_url_aliases))
+    ->execute();
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_editorial_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  $form['instance']['widget']['settings']['soft_length_style_select']['#default_value'] = 1;
+  drupal_add_css(drupal_get_path('module', 'pub_editorial') . '/css/pub_editorial.css', array('weight' => 100));
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_editorial_form_node_type_form_alter(&$form, &$form_state, $form_id) {
+  $form['submission']['soft_length_style_select']['#default_value'] = 1;
+  unset($form['workflow']['node_options']['#default_value'][1]);
+  $form['workflow']['node_options']['promote']['#disabled'] = TRUE;
+  drupal_add_css(drupal_get_path('module', 'pub_editorial') . '/css/pub_editorial.css', array('weight' => 100));
+}
+
+/**
+ * Markdown text format.
+ */
+function pub_editorial_markdown_text_format() {
+  // Create Markdown filter.
+  $markdown_format = array(
+    'format' => 'markdown',
+    'name' => 'Markdown',
+    'cache' => 1,
+    'status' => 1,
+    'weight' => 0,
+    'filters' => array(
+      'filter_markdown' => array(
+        'weight' => -46,
+        'status' => 1,
+        'settings' => array(),
+      ),
+      'filter_html' => array(
+        'weight' => -45,
+        'status' => 1,
+        'settings' => array(
+          'allowed_html' => '<a> <em> <strong> <cite> <blockquote> <code> <ul> <ol> <li> <dl> <dt> <dd> <h1> <h2> <h3> <h4> <h5> <h6> <p> <pre> <hr>',
+          'filter_html_help' => 1,
+          'filter_html_nofollow' => 0,
+        ),
+      ),
+    ),
+  );
+  filter_format_save((object) $markdown_format);
+}
+
+/**
+ * Helper that recursively unhides a menu tree branch.
+ */
+function _pub_editorial_unhide_menu_tree_branch(&$branch) {
+  $blacklist = array(
+    'admin/content/node',
+    'admin/content/dynamic-queue/list',
+    'admin/content/file/list',
+    'admin/content/queues/list',
+    'admin/workbench/content',
+    'admin/people/people',
+    'admin/people/permissions/list',
+  );
+  foreach ($branch as $sub_key => &$sub_branch) {
+    if (!empty($sub_branch['link']['link_path']) && !in_array($sub_branch['link']['link_path'], $blacklist)) {
+      $sub_branch['link']['hidden'] = 0;
+    }
+    if (!empty($sub_branch['below'])) {
+      _pub_editorial_unhide_menu_tree_branch($sub_branch['below']);
+    }
+  }
+}
+
+/**
+ * Implements hook_navbar_menu_tree_alter().
+ */
+function pub_editorial_navbar_menu_tree_alter(&$tree) {
+  // Unhide all links under the "Content", "My Workbench", and "People" menus.
+  $menu_paths_to_unhide = array(
+    'admin/content',  // Content
+    'admin/workbench',  // My Workbench
+    'admin/people',  // People
+  );
+  foreach ($tree as $key => &$branch) {
+    if (!empty($branch['link']['link_path']) && in_array($branch['link']['link_path'], $menu_paths_to_unhide) && !empty($branch['below'])) {
+      _pub_editorial_unhide_menu_tree_branch($branch['below']);
+    }
+  }
+}

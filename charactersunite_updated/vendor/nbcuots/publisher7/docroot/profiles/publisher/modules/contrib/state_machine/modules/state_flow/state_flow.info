@@ -1,0 +1,30 @@
+project = "state_flow"
+core = "7.x"
+version = "7.x-3.x"
+name = State Flow
+description = A base implementation of the State Machine
+dependencies[] = state_machine
+dependencies[] = state_flow_entity
+dependencies[] = ctools
+package = "State Machine"
+
+; Core classes
+files[] = plugins/state_flow_node.inc
+files[] = state_flow.api.php
+
+; Tests
+files[] = tests/state_flow.test
+
+; Views includes
+files[] = includes/views/state_flow.view.inc
+files[] = includes/views/state_flow_handler_field_events.inc
+files[] = includes/views/state_flow_handler_field_workflow_link.inc
+files[] = includes/views/state_flow_handler_filter_state.inc
+files[] = includes/views/state_flow_handler_field_is_node_revision_published.inc
+
+; Information added by Drupal.org packaging script on 2014-07-30
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "state_machine"
+datestamp = "1406740729"
+

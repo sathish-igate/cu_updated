@@ -1,0 +1,16 @@
+.media-browser-tab#media-tab-pub_mpx {
+  max-height: 500px;
+  overflow: scroll;
+}
+
+.views-field-plmedia-defaultThumbnailUrl img {
+  width: 100px;
+}
+
+table .views-field-fid {
+  display: none;
+}
+
+.views-exposed-form .views-submit-button {
+  padding-right: 0;
+}

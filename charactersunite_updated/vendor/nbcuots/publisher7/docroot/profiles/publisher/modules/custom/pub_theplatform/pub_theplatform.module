@@ -1,0 +1,365 @@
+<?php
+/**
+ * @file
+ * Primarily Drupal hooks and global API functions for pub_theplatform.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function pub_theplatform_menu() {
+  return array(
+    'admin/config/services/theplatform' => array(
+      'title' => 'thePlatform API settings',
+      'description' => "Settings for thePlatform's API",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('pub_theplatform_admin_form'),
+      'access arguments' => array('administer theplatform'),
+      'file' => 'pub_theplatform.admin.inc',
+    ),
+    'admin/config/services/theplatform/fields' => array(
+      'title' => 'Field Links',
+      'description' => "Settings for thePlatform's field information to populate Druapl fields",
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('pub_theplatform_fields_form'),
+      'access arguments' => array('administer theplatform'),
+      'file' => 'pub_theplatform.admin.inc',
+    ),
+    'pub_theplatform/select/%' => array(
+      'title' => 'thePlatform API callback',
+      'description' => "Settings for thePlatform's API",
+      'page callback' => 'pub_theplatform_video_data',
+      'page arguments' => array(2),
+      'access arguments' => array('import media'),
+      'file' => 'media/media_browser.inc',
+      'type' => MENU_CALLBACK,
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function pub_theplatform_permission() {
+  return array(
+    'administer theplatform' => array(
+      'title' => t('Administer thePlatform'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provide a field to specify a category for a given thePlatform category.
+ */
+function pub_theplatform_field_info() {
+  return array(
+    'theplatform_category' => array(
+      'label' => t('thePlatform Category'),
+      'description' => t('This field stores the category used to represent this content in thePlatform'),
+      'settings' => array(),
+      'instance_settings' => array('text_processing' => 0),
+      'default_widget' => 'pub_theplatform_category_field_widget',
+      'default_formatter' => 'pub_theplatform_category_field_formatter',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function pub_theplatform_field_is_empty($item, $field) {
+  return empty($item['theplatform_category']);
+}
+
+/**
+ * Implements hook_field_widget_info().
+ *
+ * Used to provide the field widget for selecting a category from thePlatform.
+ */
+function pub_theplatform_field_widget_info() {
+  return array(
+    'pub_theplatform_category_field_widget' => array(
+      'label' => t('thePlatform Category'),
+      'field types' => array('theplatform_category'),
+      'settings' => array(),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_DEFAULT,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ *
+ * Used to provide the field form element for thePlatform category fields.
+ */
+function pub_theplatform_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  // Grab a list of the categories from thePlatform.
+  $categories = pub_theplatform_get_categories();
+
+  // Return a select list form element.
+  $widget = array(
+    '#title' => $element['#title'],
+    '#description' => $element['#description'],
+    '#type' => 'select',
+    '#default_value' => isset($items[$delta]) ? $items[$delta] : '',
+    '#options' => $categories,
+  );
+
+  $element['theplatform_category'] = $widget;
+  return $element;
+}
+
+/**
+ * Implements hook_field_attach_load().
+ *
+ * This is done to make the values from thePlatform replace into the fields.
+ */
+function pub_theplatform_field_attach_load($entity_type, $entities, $age, $options) {
+  if ($entity_type !== 'file') {
+    // Only act on files.
+    return;
+  }
+
+  foreach ($entities as $file) {
+    if ($file->filemime !== 'video/theplatform') {
+      // Only edit thePlatform videos.
+      continue;
+    }
+
+    // Get the mapping for the fields from Drupal to thePlatform.
+    $field_map = variable_get('pub_theplatform_fields', NULL);
+
+    // If we don't have any fields to map bail early.
+    if (!isset($field_map)) {
+      return;
+    }
+
+    // Prep the request that will load the information we need for the node.
+    $the_platform = new pubThePlatformAPIRequest(variable_get('theplatform_feed_url', ''));
+    $the_platform->setID(file_uri_target($file->uri));
+    foreach ($field_map as $drupal_name => $the_platform_name) {
+      if (isset($file->{$drupal_name})) {
+        $the_platform->addField($the_platform_name);
+      }
+    }
+    $data = $the_platform->execute();
+    // We should only have one item - and exactly one item.
+    $data = array_shift($data);
+
+    // Parse everything and make sure we fill in everywhere each row + each
+    // lang. This should be und and 0 all the time, but why not support more?
+    $field_map = array_flip($field_map);
+    foreach ($data as $field => $value) {
+      foreach ($file->{$field_map[$field]} as $lang => $row) {
+        foreach ($row as $offset => $data) {
+          $file->{$field_map[$field]}[$lang][$offset] = array(
+            "value" => $value,
+            "summary" => $value,
+            "format" => "filtered_html",
+            "safe_value" => check_markup($value),
+            "safe_summary" => check_markup($value),
+          );
+        }
+      }
+
+      // If there is no array, just make one.
+      if (empty($file->{$field_map[$field]})) {
+        $file->{$field_map[$field]} = array(
+          LANGUAGE_NONE => array(
+            0 => array(
+              "value" => $value,
+              "summary" => $value,
+              "format" => "filtered_html",
+              "safe_value" => check_markup($value),
+              "safe_summary" => check_markup($value),
+            ),
+          ),
+        );
+      }
+    }
+  }
+}
+
+
+/**
+ * Implements hook_form_BASE_alter().
+ *
+ * This is done to make the fields from the videos not editable in the CMS.
+ * For thePlatform goto thePlatform to edit them.
+ */
+function pub_theplatform_form_file_entity_edit_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['preview']['#file']->filemime) && $form['preview']['#file']->filemime == 'video/theplatform') {
+    foreach ($form as $name => $field) {
+      if (substr($name, 0, 1) != '#' && isset($field['#type']) && $field['#type'] != 'value' && $field['#type'] != 'actions') {
+        $form[$name]['#disabled'] = TRUE;
+      }
+    }
+    // Display a message telling a user there are no fields to edit when trying
+    // to edit a video media field.
+    drupal_set_message(t('Video metadata from thePlatform cannot be edited from this location. To edit a video from thePlatform, go to MPX (<a target="_blank" href="@mpx">http://mpx.theplatform.com</a>).', array('@mpx' => 'http://mpx.theplatform.com')));
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function pub_theplatform_views_api() {
+  return array(
+    'api' => 3.0,
+  );
+}
+
+/**
+ * Returns a list of plugins for the media browser.
+ *
+ * Media provides a CTools plugin API; this is one of those hooks. It should
+ * return a nested array of plugin information, keyed by plugin name. Each
+ * plugin info array may have the following keys:
+ * - title (required): A name for the tab in the media browser.
+ * - class (required): The class name of the handler. This class must
+ *   implement a view() method, and may (should) extend the @link
+ *   MediaBrowserPlugin MediaBrowserPlugin @endlink class.
+ * - weight (optional): Integer to determine the tab order. Defaults to 0.
+ * - access callback (optional): A callback for user access checks.
+ * - access arguments (optional): An array of arguments for the user access
+ *   check.
+ *
+ * Additional custom keys may be provided for use by the handler.
+ *
+ * @see hook_media_browser_plugin_info_alter()
+ * @see media_get_browser_plugin_info()
+ */
+function pub_theplatform_media_browser_plugin_info() {
+  return array(
+    'pub_theplatform' => array(
+      'title' => t('thePlatform'),
+      'class' => 'MediaBrowserThePlatform',
+    ),
+  );
+}
+
+/**
+ * Gathers information on internet providers.
+ *
+ * Implementers return an multi-dimensional array, keyed by a class name with
+ * the following elements:
+ *
+ * - title
+ * - image (optional)
+ * - hidden: bool If the logo should be shown on form. (optional)
+ * - weight (optional)
+ */
+function pub_theplatform_media_internet_providers() {
+  return array(
+    'MediaInternetThePlatformHandler' => array(
+      'title' => 'thePlatform',
+    ),
+  );
+}
+
+/**
+ * Implements hook_stream_wrappers().
+ */
+function pub_theplatform_stream_wrappers() {
+  return array(
+    'theplatform' => array(
+      'name' => t('thePlatform videos'),
+      'class' => 'MediaThePlatformStreamWrapper',
+      'description' => t('Videos provided by thePlatform.'),
+      'type' => STREAM_WRAPPERS_READ_VISIBLE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function pub_theplatform_theme($existing, $type, $theme, $path) {
+  return array(
+    'pub_theplatform_video_player' => array(
+      'variables' => array('platform_file_id' => NULL, 'theplatform_player' => NULL),
+      'path' => $path . '/templates',
+      'template' => 'theplatform-player',
+      'preprocess functions' => array('pub_theplatform_load_css', 'template_preprocess'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_file_mimetype_mapping_alter().
+ *
+ * Register the video/theplatform mimetype.
+ */
+function pub_theplatform_file_mimetype_mapping_alter(&$mapping) {
+  $mapping['mimetypes'][] = 'video/theplatform';
+}
+
+/**
+ * Implements hook_file_default_types_alter().
+ *
+ * Adds the video/theplatform fake mimetype to video files.
+ */
+function pub_theplatform_file_default_types_alter(&$types) {
+  $types['video']->mimetypes[] = 'video/theplatform';
+}
+
+/**
+ * Function to make sure that when we use our theme, we pull in our CSS.
+ */
+function pub_theplatform_load_css() {
+  $path = drupal_get_path('module', 'pub_theplatform');
+  drupal_add_css($path . '/pub_theplatform.css', 'file');
+}
+
+/**
+ * Function to fetch and return an array of the categories from thePlatform.
+ */
+function pub_theplatform_get_categories() {
+  // Get the categories that exist in our feed.
+  $the_platform = new pubThePlatformAPIRequest(variable_get('theplatform_feed_url', ''));
+  $categories = $the_platform->getCategories()->addField('plcategory$fullTitle')->execute();
+
+  $options = array('' => 'Any');
+  foreach ($categories as $c) {
+    $options[$c->{'plcategory$fullTitle'}] = $c->{'plcategory$fullTitle'};
+  }
+
+  return $options;
+}
+
+/**
+ * Helper function that will load file IDs from a media item's GUID.
+ */
+function _pub_the_platform_get_file_id($guid) {
+  require_once 'pub_theplatform.api.inc';
+
+  $api = new pubThePlatformAPIRequest(variable_get('theplatform_feed_url', ''));
+
+  // Load the file info for the item we're trying to view, and cur us down to
+  // the media$content items.
+  $file_info = $api->addField('media:content')->setID($guid)->execute();
+  // Handle error conditions, we may have nothing come back.
+  if (!is_array($file_info) || empty($file_info) || !is_object($file_info[0]) || !isset($file_info[0]->{'media$content'})) {
+    return FALSE;
+  }
+  $file_info = $file_info[0]->{'media$content'};
+
+  // Run through everything and grab the first video in the feed.
+  foreach ($file_info as $file) {
+    if (in_array('Video', $file->{'plfile$assetTypes'})) {
+      break;
+    }
+  }
+
+  // Extract the file id from the URL.
+  list($file_id) = explode('?', $file->{'plfile$url'});
+  $file_id = explode('/', $file_id);
+  $file_id = array_pop($file_id);
+
+  return $file_id;
+}

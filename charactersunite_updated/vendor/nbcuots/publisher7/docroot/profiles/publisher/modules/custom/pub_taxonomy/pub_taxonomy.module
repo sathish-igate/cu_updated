@@ -1,0 +1,88 @@
+<?php
+/**
+ * @file
+ * Drupal needs this blank file.
+ */
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * Add custom taxonomy terms to the vocabularies created by this module.
+ */
+function pub_taxonomy_entity_insert($entity, $type) {
+  if ($type == 'taxonomy_vocabulary') {
+
+    $terms = array();
+    switch ($entity->machine_name) {
+      case 'genre':
+        $terms = array(
+          'Action',
+          'Adventure',
+          'Animated',
+          'Anthology',
+          "Children's",
+          'Comedy',
+          'Comedy, Stand-up',
+          'Crime',
+          'Daytime',
+          'Documentary',
+          'Docudrama',
+          'Dramality',
+          'Drama',
+          'Drama, Courtroom',
+          'Drama, Legal',
+          'Drama, Medical',
+          'Educational',
+          'Factual',
+          'Fantasy',
+          'Game Show',
+          'Historical',
+          'Horror',
+          'Mockumentary',
+          'Music Television',
+          'Mystery',
+          'News',
+          'Paranoid',
+          'Philosophical',
+          'Police Procedural',
+          'Political',
+          'Reality',
+          'Romance',
+          'Satire',
+          'Science Fiction',
+          'Serial',
+          'Sitcom',
+          'Soap Opera',
+          'Sports',
+          'Telenovela',
+          'Thriller',
+          'Variety Show',
+          'Western',
+        );
+        break;
+
+      case 'role':
+        $terms = array(
+          'Character',
+          'Contributor',
+          'Director',
+          'Executive Producer',
+          'Host',
+          'Judge',
+          'Producer',
+          'Self',
+          'Song Writer',
+          'Writer',
+        );
+        break;
+    }
+
+    foreach ($terms as $name) {
+      $term = new StdClass();
+      $term->name = $name;
+      $term->vid = $entity->vid;
+      $term->vocabulary_machine_name = $entity->machine_name;
+      taxonomy_term_save($term);
+    }
+  }
+}

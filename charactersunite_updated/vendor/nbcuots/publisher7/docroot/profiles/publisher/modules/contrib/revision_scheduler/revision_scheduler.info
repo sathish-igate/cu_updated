@@ -1,0 +1,10 @@
+name = Revision operation scheduler
+description = Schedule operations of node revisions for future dates.
+core = 7.x
+dependencies[] = date_popup
+dependencies[] = ctools
+files[] = views/revision_scheduler_handler_field_actions.inc
+files[] = views/revision_scheduler_handler_field_operation.inc
+files[] = views/revision_scheduler_handler_field_scheduled_executed_time.inc
+files[] = views/revision_scheduler_handler_filter_date.inc
+files[] = views/revision_scheduler_handler_filter_operation.inc

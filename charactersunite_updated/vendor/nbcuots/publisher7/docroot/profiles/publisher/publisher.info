@@ -1,0 +1,90 @@
+name = NBCU Publisher: Default Installation
+description = The default installation of Publisher.
+core = 7.x
+version = PUBLISHER_VERSION
+exclusive = TRUE
+
+files[] = publisher.profile
+
+; Dependencies have been moved over from Pub Entertainment to so that automated
+; testing continues to work.
+;
+; Drupal Core Modules
+dependencies[] = block
+dependencies[] = contextual
+dependencies[] = image
+dependencies[] = list
+dependencies[] = menu
+dependencies[] = number
+dependencies[] = options
+dependencies[] = path
+dependencies[] = taxonomy
+dependencies[] = syslog
+dependencies[] = shortcut
+dependencies[] = field_ui
+dependencies[] = file
+
+; Contrib Modules
+dependencies[] = acquia_cloud_sticky_sessions
+dependencies[] = clone
+dependencies[] = collection
+dependencies[] = collection_field
+dependencies[] = content_lock
+dependencies[] = content_lock_timeout
+dependencies[] = context
+dependencies[] = date_popup
+dependencies[] = diff
+dependencies[] = ds
+dependencies[] = entitycache
+dependencies[] = entity_token
+dependencies[] = environment_indicator
+dependencies[] = exportable_scheduler
+dependencies[] = features
+dependencies[] = focal_point
+dependencies[] = file_entity_revisions
+dependencies[] = globalredirect
+dependencies[] = iib
+dependencies[] = media
+dependencies[] = media_bulk_upload
+dependencies[] = media_multiselect
+dependencies[] = metatag
+dependencies[] = metatag_opengraph
+dependencies[] = metatag_twitter_cards
+dependencies[] = metatag_twitter_cards_see_it
+dependencies[] = module_filter
+dependencies[] = multiform
+dependencies[] = navbar
+dependencies[] = pathauto
+dependencies[] = plupload
+dependencies[] = queues_workbench
+dependencies[] = revision_scheduler_sps
+dependencies[] = simple_exif
+dependencies[] = status_watchdog
+dependencies[] = soft_length_limit
+dependencies[] = sticky_edit_actions
+dependencies[] = strongarm
+dependencies[] = sps
+dependencies[] = token
+dependencies[] = views
+dependencies[] = views_bulk_operations
+dependencies[] = wysiwyg
+
+; Custom Modules
+dependencies[] = pub_ads
+dependencies[] = pub_analytics
+dependencies[] = pub_editorial
+dependencies[] = pub_hide_submit
+dependencies[] = pub_media
+dependencies[] = pub_movie
+dependencies[] = pub_mpx
+dependencies[] = pub_promo_queue
+dependencies[] = pub_relationships
+dependencies[] = pub_relationships_movie
+dependencies[] = pub_report_client
+dependencies[] = pub_sec
+dependencies[] = pub_social
+dependencies[] = pub_tv
+dependencies[] = pub_users
+dependencies[] = pub_workbench
+dependencies[] = dynamic_queue
+dependencies[] = dynamic_queue_workbench

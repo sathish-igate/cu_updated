@@ -1,0 +1,43 @@
+<?php
+
+/**
+  * Implements hook_install()
+  */
+function pub_promotional_content_install() {
+  $home_rotator = new stdClass;
+  $home_rotator->api_version = 2;
+  $home_rotator->name = 'homepage_rotator';
+  $home_rotator->title = 'Home Page Rotator';
+  $home_rotator->subqueue_title = '';
+  $home_rotator->size = 5;
+  $home_rotator->link = 'Add to home page rotator';
+  $home_rotator->link_remove = 'Remove from home page rotator';
+  $home_rotator->owner = 'nodequeue';
+  $home_rotator->show_in_ui = 1;
+  $home_rotator->show_in_tab = 1;
+  $home_rotator->show_in_links = 1;
+  $home_rotator->reference = '0';
+  $home_rotator->reverse = 0;
+  $home_rotator->i18n = 0;
+  $home_rotator->roles = array(3, 10);
+  $home_rotator->types = array(
+    0 => 'promotional_content',
+  );
+  $home_rotator->add_subqueue = array(
+    0 => 'Home Page Rotator',
+  );
+
+  nodequeue_save($home_rotator);
+
+  $image_settings = variable_get('field_bundle_settings_file__image');
+  $image_settings['view_modes']['promoted_content']['custom_settings'] = true;
+}
+
+/**
+ * Revert Feature on update to rearrange fields and field groups.
+ */
+function pub_promotional_content_update_7000() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_promotional_content'));
+}

@@ -1,0 +1,239 @@
+<?php
+
+/**
+ * @file
+ * Pub Quiz Example install.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function pub_quiz_example_install() {
+
+  // Add the quiz node.
+  $quiz = new stdClass();
+  $quiz->title = 'Example Quiz';
+  $quiz->type = 'quiz';
+  $quiz->language = LANGUAGE_NONE;
+  $quiz->promoted = 0;
+  node_object_prepare($quiz);
+  $quiz->uid = 1;
+  $options = array(
+    'aid' => NULL,
+    'allow_jumping' => 0,
+    'allow_resume' => 0,
+    'allow_skipping' => 0,
+    'always_available' => TRUE,
+    'backwards_navigation' => 0,
+    'has_userpoints' => 0,
+    'keep_results' => 2,
+    'mark_doubtful' => 0,
+    'max_score' => 0,
+    'max_score_for_random' => 1,
+    'number_of_random_questions' => 0,
+    'pass_rate' => 0,
+    'quiz_always' => 1,
+    'quiz_close' => _quiz_form_prepare_date(NULL, variable_get('quiz_default_close', 30)),
+    'quiz_open' => _quiz_form_prepare_date(),
+    'randomization' => 0,
+    'repeat_until_correct' => 0,
+    'review_options' => array('question' => array(), 'end' => array('quiz_feedback' => 'quiz_feedback')),
+    'show_attempt_stats' => 0,
+    'show_passed' => 0,
+    'summary_default' => '',
+    'summary_default_format' => filter_fallback_format(),
+    'summary_pass' => '',
+    'summary_pass_format' => filter_fallback_format(),
+    'takes' => 0,
+    'tid' => 0,
+    'time_limit' => 0,
+    'userpoints_tid' => 0,
+    'body' => array(
+      LANGUAGE_NONE => array(
+        0 => array(
+          'value' => '<p>This is an example quiz.</p>',
+          'format' => 'wysiwyg_mini',
+          'safe_value' => '<p>This is an example quiz.</p>',
+        ),
+      ),
+    ),
+    'resultoptions' => array(
+      0 => array(
+        'option_name' => 'A',
+        'option_summary' => '<p>You are persona type A.',
+        'option_summary_format' => 'wysiwyg_mini',
+        'option_start' => 75,
+        'option_end' => 100,
+      ),
+      1 => array(
+        'option_name' => 'B',
+        'option_summary' => '<p>You are persona type B.',
+        'option_summary_format' => 'wysiwyg_mini',
+        'option_start' => 50,
+        'option_end' => 74,
+      ),
+      2 => array(
+        'option_name' => 'C',
+        'option_summary' => '<p>You are persona type C.',
+        'option_summary_format' => 'wysiwyg_mini',
+        'option_start' => 25,
+        'option_end' => 49,
+      ),
+      3 => array(
+        'option_name' => 'D',
+        'option_summary' => '<p>You are persona type D.',
+        'option_summary_format' => 'wysiwyg_mini',
+        'option_start' => 0,
+        'option_end' => 24,
+      ),
+    ),
+  );
+  foreach ($options as $key => $value) {
+    $quiz->$key = $value;
+  }
+
+  $quiz = node_submit($quiz);
+  node_save($quiz);
+  variable_set('pub_quiz_example_nid', $quiz->nid);
+
+  // Add the first question node.
+  $question1 = new stdClass();
+  $question1->title = 'What is your favorite color?';
+  $question1->type = 'multichoice';
+  $question1->language = LANGUAGE_NONE;
+  $question1->promoted = 0;
+  node_object_prepare($question1);
+  $question1->uid = 1;
+  $question1->choice_multi = 0;
+  $question1->choice_random = 0;
+  $question1->choice_boolean = 0;
+  $question1->body = array(
+    LANGUAGE_NONE => array(
+      0 => array(
+        'value' => '<p>What is your favorite color?</p>',
+        'format' => 'wysiwyg_mini',
+        'safe_value' => '<p>What is your favorite color?</p>',
+      ),
+    ),
+  );
+  $question1->alternatives = array();
+  $question1->alternatives[] = array(
+    'answer' => array('value' => '<p>Red</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 4,
+    'score_if_not_chosen' => 0,
+  );
+  $question1->alternatives[] = array(
+    'answer' => array('value' => '<p>Green</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 3,
+    'score_if_not_chosen' => 0,
+  );
+  $question1->alternatives[] = array(
+    'answer' => array('value' => '<p>Blue</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 2,
+    'score_if_not_chosen' => 0,
+  );
+  $question1->alternatives[] = array(
+    'answer' => array('value' => '<p>Yellow</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 1,
+    'score_if_not_chosen' => 0,
+  );
+  $question1 = node_submit($question1);
+  node_save($question1);
+  variable_set('pub_quiz_example_question1_nid', $question1->nid);
+
+  // Add the second question node.
+  $question2 = new stdClass();
+  $question2->title = 'What is your favorite animal?';
+  $question2->type = 'multichoice';
+  $question2->language = LANGUAGE_NONE;
+  $question2->promoted = 0;
+  node_object_prepare($question2);
+  $question2->uid = 1;
+  $question2->choice_multi = 0;
+  $question2->choice_random = 0;
+  $question2->choice_boolean = 0;
+  $question2->body = array(
+    LANGUAGE_NONE => array(
+      0 => array(
+        'value' => '<p>What is your favorite animal?</p>',
+        'format' => 'wysiwyg_mini',
+        'safe_value' => '<p>What is your favorite animal?</p>',
+      ),
+    ),
+  );
+  $question2->alternatives = array();
+  $question2->alternatives[] = array(
+    'answer' => array('value' => '<p>Lion</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 4,
+    'score_if_not_chosen' => 0,
+  );
+  $question2->alternatives[] = array(
+    'answer' => array('value' => '<p>Deer</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 3,
+    'score_if_not_chosen' => 0,
+  );
+  $question2->alternatives[] = array(
+    'answer' => array('value' => '<p>Elephant</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 2,
+    'score_if_not_chosen' => 0,
+  );
+  $question2->alternatives[] = array(
+    'answer' => array('value' => '<p>Monkey</p>', 'format' => 'wysiwyg_mini'),
+    'feedback_if_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'feedback_if_not_chosen' => array('value' => '', 'format' => 'wysiwyg_mini'),
+    'score_if_chosen' => 1,
+    'score_if_not_chosen' => 0,
+  );
+  $question2 = node_submit($question2);
+  node_save($question2);
+  variable_set('pub_quiz_example_question2_nid', $question2->nid);
+
+  // Associate the questions to the quiz.
+  $question1->quiz_nid = $quiz->nid;
+  $question1->quiz_vid = $quiz->vid;
+  _quiz_question_get_instance($question1)->saveRelationships();
+
+  $question2->quiz_nid = $quiz->nid;
+  $question2->quiz_vid = $quiz->vid;
+  _quiz_question_get_instance($question2)->saveRelationships();
+
+  quiz_update_max_score_properties(array($quiz->vid));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_quiz_example_uninstall() {
+  $nid = variable_get('pub_quiz_example_nid', '');
+  if (!empty($nid)) {
+    node_delete($nid);
+  }
+
+  $nid = variable_get('pub_quiz_example_question1_nid', '');
+  if (!empty($nid)) {
+    node_delete($nid);
+  }
+
+  $nid = variable_get('pub_quiz_example_question2_nid', '');
+  if (!empty($nid)) {
+    node_delete($nid);
+  }
+
+  variable_del('pub_quiz_example_nid');
+  variable_del('pub_quiz_example_question1_nid');
+  variable_del('pub_quiz_example_question2_nid');
+}

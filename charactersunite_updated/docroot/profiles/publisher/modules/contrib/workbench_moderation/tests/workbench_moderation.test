@@ -1,0 +1,254 @@
+<?php
+/**
+ * @file
+ * workbench_moderation.test
+ */
+
+/**
+ * Tests for Workbench Moderation.
+ */
+class WorkbenchModerationWebTestCase extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Workbench Moderation basic tests',
+      'description' => 'Perform basic web tests on Workbench Moderation.',
+      'group' => 'Workbench Moderation',
+    );
+  }
+
+  function setup() {
+    parent::setup('state_machine', 'state_flow', 'state_flow_entity', 'workbench_moderation', 'workbench_workflows', 'views');
+
+    // install the basic workflow.
+    module_load_include('inc', 'workbench_workflows', 'includes/workbench_workflows.starter');
+    workbench_workflows_import_starter_exportables();
+
+    $permissions = array(
+      'administer nodes',
+      'bypass node access',
+      'use workbench_moderation my drafts tab',
+      'use workbench_moderation needs review tab',
+      'administer_workbench_workflows',
+      'access administration pages',
+      'administer site configuration'
+    );
+    $web_user = $this->drupalCreateUser($permissions);
+    $this->drupalLogin($web_user);
+  }
+
+  /**
+   * This test verifies that workflows are not used after being disabled.
+   *
+   * The test also sets the variable to ignore nodes that have no workflow set.
+   *
+   * The flow of this test is to
+   * 1. Go to the node add page to verify that a workflow events are present.
+   * 2. Disable the one workflow.
+   * 3. Go back to the node add page to verify that no workflow events are present.
+   */
+  function testOfDisbablingWorkflow() {
+
+    // Set the variable that will cause the ignore class to be picked up if no
+    // other workflow is explicitly set.
+    variable_set('workbench_workflows_default_to_ignore', TRUE);
+
+    // Assert that workflow events are available.
+    $this->drupalGet("node/add/article");
+    $this->assertResponse(200);
+    $xpath_string = "//select[@id=:select_id]";
+    $xpath_replacements = array(
+      ':select_id' => 'edit-event',
+    );
+    $tr = $this->xpath($xpath_string, $xpath_replacements);
+    $this->assertEqual(count($tr), 1, 'There is a workflow available on the node add form.');
+
+    // Go to the Workflows admin page and disable the only workflow.
+    $this->drupalGet("admin/config/workflow/workbench-workflows/workflows");
+    $this->assertResponse(200);
+    // Click the disable link.
+    $this->clickLink('Disable');
+
+
+    // Assert that workflow events are not available.
+    $this->drupalGet("node/add/article");
+    $this->assertResponse(200);
+    $xpath_string = "//select[@id=:select_id]";
+    $xpath_replacements = array(':select_id' => 'edit-event');
+    $tr = $this->xpath($xpath_string, $xpath_replacements);
+    $this->assertEqual(count($tr), 0, 'There is not workflow available on the node add form.');
+  }
+
+  /**
+   * Test View Draft tab.
+   */
+  function testViewDraftTab() {
+
+    // This first chunk is not specific to the draft tab and perhaps should be
+    // abstracted to a helper function.
+
+    $edit = array();
+    $title = $this->randomName(8);
+    $edit['title'] = $title;
+    $edit['event'] = 'draft';
+    $edit['event_comment'] = $this->randomName(8);
+    $this->drupalPost("node/add/article", $edit, t('Save'));
+    $this->drupalGet("node/1");
+    $this->assertText($title, t('Title is visible on draft node for logged in user.'));
+
+    // Check for duplicate state records.
+    $this->_testOfDuplicateStates();
+
+    // Check that view draft tab is not displaying.
+    $this->drupalGet('node/1/draft');
+    $this->assertResponse(403, 'View Draft tab responds with 403 to logged in user');
+
+    // Check anonymous behavior. Verify access denied.
+    $this->drupalLogout();
+    $this->drupalGet("node/1");
+    $this->assertNoText($title, t('Title is not visible on draft node for anonymous user.'));
+    $this->assertResponse(403, 'Draft node page responds with 403 to anonymous user');
+
+    // Check that view draft tab is not displaying.
+    $this->drupalGet('node/1/draft');
+    $this->assertResponse(403, 'View Draft tab responds with 403 to anonymous user');
+
+    // Log in again.
+    $web_user = $this->drupalCreateUser(array('administer nodes', 'bypass node access'));
+    $this->drupalLogin($web_user);
+
+    // Set the node to published.
+    $edit =array();
+    $edit['event'] = 'published';
+    $edit['event_comment'] = $this->randomName(8);
+    $this->drupalPost("node/1/revisions-state-flow-states", $edit, t('Update State'));
+    $this->drupalGet("node/1");
+    $this->assertText($title, t('Title is visible on published node for logged in user.'));
+
+    // Check for duplicate state records.
+    $this->_testOfDuplicateStates();
+
+    // Check that view draft tab is not displaying.
+    $this->drupalGet('node/1/draft');
+    $this->assertResponse(403, 'View Draft tab responds with 403 to logged in user');
+
+    // Check anonymous behavior. Verify access after publishing.
+    $this->drupalLogout();
+    $this->drupalGet("node/1");
+    $this->assertText($title, t('After publishing, anonymous user can see node title.'));
+    $this->assertResponse(200, 'After publishing,  anonymous user gets a 200 for node page.');
+
+    // Check that view draft tab is not displaying.
+    $this->drupalGet('node/1/draft');
+    $this->assertResponse(403, 'View Draft tab responds with 403 to anonymous user');
+
+    // Log in again.
+    $web_user = $this->drupalCreateUser(array('administer nodes', 'bypass node access'));
+    $this->drupalLogin($web_user);
+
+    // Edit the node, creating a new title, set to needs review.
+    $edit = array();
+    $new_title = $this->randomName(8);
+    $edit['title'] = $new_title;
+    $edit['event'] = 'needs_review';
+    $this->drupalPost("node/1/edit", $edit, t('Save'));
+
+    // Check for duplicate state records.
+    $this->_testOfDuplicateStates();
+
+    // Check node/1.
+    // Verify that it is still showing the old title.
+    $this->drupalGet("node/1");
+    $this->assertText($title, t('User can see published node title.'));
+    $this->assertResponse(200, 'User gets a 200 for node page.');
+
+    // Check node/1/draft
+    // Verify that it is showing the new draft title.
+    $this->drupalGet("node/1/draft");
+    $this->assertText($new_title, t('User can see node draft title.'));
+    $this->assertResponse(200, 'User gets a 200 for node draft page.');
+
+    // Log out.
+    // Check node/1.
+    // Verify that it is still showing the old title to anonymous users.
+    $this->drupalLogout();
+    $this->drupalGet("node/1");
+    $this->assertText($title, t('Title is visible on published node for anonymous user.'));
+    $this->assertResponse(200, 'Anonymous user gets a 200 for node page.');
+
+    // Check node/1/draft
+    // Verify that gives an access denied.
+    $this->drupalGet("node/1/draft");
+    $this->assertNoText($new_title, t('Title is not visible on draft node for anonymous user.'));
+    $this->assertResponse(403, 'Draft node page responds with 403 to anonymous user');
+  }
+
+  /**
+   * Without the correct joins, there can be duplicates on the My Drafts tab.
+   * This is a test of one of those instances.
+   */
+  function testMyDraftsTabDuplicates() {
+
+    // Make a node, save as draft and change the state twice. This creates three
+    // state_flow_history_entities for one node revision.
+    $edit = array();
+    $new_title = $this->randomName(8);
+    $edit['event'] = 'draft';
+    $edit['title'] = $this->randomName(8);
+    $this->drupalPost("node/add/article", $edit, t('Save'));
+
+    $edit = array(
+      'event' => 'needs_review'
+    );
+    // Go to needs review twice.
+    $this->drupalPost("node/1/revisions-state-flow-states", $edit, t('Update State'));
+    $this->drupalPost("node/1/revisions-state-flow-states", $edit, t('Update State'));
+
+    // Check the my drafts tab.
+    $this->drupalGet("admin/workbench/drafts");
+    $this->assertResponse(200);
+
+    $xpath_string = "//tbody/tr";
+    $tr = $this->xpath($xpath_string);
+    $this->assertEqual(count($tr), 1, 'There is only one row for the one existing revision');
+
+
+    // Also check the needs review tab.
+    $this->drupalGet("admin/workbench/needs-review");
+    $this->assertResponse(200);
+
+
+    $tr = $this->xpath($xpath_string);
+    $this->assertEqual(count($tr), 1, 'There is only one row for the one existing revision');
+  }
+
+
+  /**
+   * Helper function to check for duplicate state records.
+   */
+  function _testOfDuplicateStates() {
+
+    $states = db_select('state_flow_states')
+                ->fields('state_flow_states', array())
+                ->execute()
+                ->fetchAll();
+
+    $hids = array();
+    $duplicates = FALSE;
+    foreach ($states as $state) {
+      if (!empty($state->hid)) {
+        if (empty($hids[$state->hid])) {
+          $hids[$state->hid][] = $state;
+        }
+        else {
+          $duplicates = TRUE;
+        }
+      }
+    }
+
+    $this->assertFalse($duplicates, t('There are no duplicate records in State Flow States'));
+
+    if ($duplicates) {
+      debug($states);
+    }
+  }
+}

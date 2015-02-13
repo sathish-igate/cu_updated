@@ -1,0 +1,5 @@
+name = Pub Relationships
+description = Publisher 7 Relationships core
+core = 7.x
+version = 7.x-1.0
+package = Publisher

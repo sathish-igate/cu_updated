@@ -1,0 +1,10 @@
+name = Pub Sauce
+description = A simple administration theme used only during the installation.
+package = Publisher
+core = 7.x
+base theme  = seven
+
+; Set the default values of settings on the theme-settings.php form.
+
+settings[default_logo] = 0
+settings[logo_path] = profiles/publisher/themes/pub_sauce/logo.svg

@@ -1,0 +1,103 @@
+# Ignore paths that contain user-generated content.
+docroot/sites/*/files
+docroot/sites/*/private
+
+# Ignore local/custom aliases.
+docroot/sites/all/drush/aliases/aliases.drushrc.php
+
+#Ignore folders used by the build releases scripts
+builds/pub_releases
+
+# Ignore database dumps from drush local-update.
+dumps
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# OS X files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must ends with two \r.
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+#Ignore SASS/Compass cache files
+#Ignore sass cache folders
+.sass-cache
+
+# Ignore project files created by phpstorm
+.idea
+
+# Ignore vim swap files
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+
+# Ignore tags created by etags, ctags, gtags (GNU global) and cscope
+TAGS
+!TAGS/
+tags
+!tags/
+gtags.files
+GTAGS
+GRTAGS
+GPATH
+cscope.files
+cscope.out
+cscope.in.out
+cscope.po.out
+
+# Ignore TextMate files
+*.tmproj
+*.tmproject
+tmtags
+
+# Ignore submlime text.
+# workspace files are user-specific
+*.sublime-workspace
+
+# project files should be checked into the repository, unless a significant
+# proportion of contributors will probably not be using SublimeText
+*.sublime-project
+
+# Ignore project files created by Komodo
+*.komodoproject
+.komodotools
+
+/vendor/
+/rb-vendor/
+# ignore composer.phar b/c it's automatically fetched and sorta large
+/bin/composer.phar
+# ignore drush b/c we can re-grab it on demand
+/bin/drush
+/acquia-credentials.yml
+/artifacts/
+/logs/
+/results/
+
+# Drush rebuild local overrides file
+docroot/sites/default/drush/rebuild.local.yml

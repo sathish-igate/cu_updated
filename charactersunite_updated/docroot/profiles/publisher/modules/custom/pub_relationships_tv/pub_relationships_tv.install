@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ *
+ * Install file for Publisher TV Relationships.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_relationships_tv_uninstall() {
+  module_load_include('module', 'pub_relationships_tv', 'pub_relationships_tv');
+  // Clean up all our variables on uninstall.
+  $content_types = node_type_get_names();
+  foreach ($content_types as $bundle => $name) {
+    $form_key = 'pub_relationships_tv_content_type_' . $bundle;
+    $drop_key = 'pub_relationships_tv_content_type_' . $bundle . '_level';
+    variable_del($form_key);
+    variable_del($drop_key);
+    pub_relationships_tv_remove_instance_if_exists($bundle);
+  }
+}

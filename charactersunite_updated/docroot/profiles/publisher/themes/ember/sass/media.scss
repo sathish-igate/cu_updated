@@ -1,0 +1,85 @@
+/**
+ * @file
+ * Replaces Media module's default styles.
+ */
+
+@import "base";
+@import "ux_styleguide/drupal/seven/media/media";
+
+@mixin border-radius($radius) {
+  -webkit-border-radius: $radius;
+  -moz-border-radius: $radius;
+  -ms-border-radius: $radius;
+  -o-border-radius: $radius;
+  border-radius: $radius;
+}
+@mixin modal-titlebar() {
+  @include border-radius(0px);
+  background: #303030;
+  padding: 1em 2.25em 0;
+  color: #cccccc;
+  box-sizing: border-box;
+  border:none;
+}
+@mixin modal-title() {
+  font-size:1.8em;
+  font-family:"Helvetica Neue", helvetica, "Segoe UI", segoe, "Ubuntu", "Droid Sans", "Arial", sans-serif;
+  font-weight:200;
+  margin:0;
+}
+@mixin modal-titlebar-close($top) {
+  position: absolute;
+  top: $top;
+  right: 1em;
+  padding: 0;
+}
+@mixin modal-titlebar-close-icon() {
+  @include border-radius(2px);
+  background-color: #ccc;
+  border: 1px solid #fff;
+}
+
+/* Media browser modal */
+.media-wrapper {
+
+  .ui-dialog-titlebar {
+    @include modal-titlebar();
+
+    .ui-dialog-title {
+      @include modal-title();
+    }
+
+    .ui-dialog-titlebar-close {
+      @include modal-titlebar-close(1.5em);
+
+      .ui-icon {
+        @include modal-titlebar-close-icon();
+      }
+    }
+  }
+}
+
+/* Ctools modal */
+#modalContent {
+
+  .modal-header {
+    @include modal-titlebar();
+
+    .modal-title {
+      @include modal-title();
+      position: relative;
+      top: -0.2em;
+    }
+
+    .close {
+      @include modal-titlebar-close(1em);
+
+      img {
+        @include modal-titlebar-close-icon();
+        display: inline-block;
+        float: right;
+        margin: 0 0 0 5px;
+      }
+    }
+  }
+}

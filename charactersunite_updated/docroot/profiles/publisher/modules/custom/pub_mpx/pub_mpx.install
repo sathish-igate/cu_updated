@@ -1,0 +1,343 @@
+<?php
+
+
+/**
+ * Implements hook_requirements().
+ */
+/*
+
+DISABLING FOR NOW.
+
+function pub_mpx_requirements($phase) {
+
+  if ($phase != 'install') {
+    return array();
+  }
+
+  $requirements = array();
+  $requirements['pub_mpx_module_check']['title'] = t('Conflicting Module Check.');
+  $requirements['pub_mpx_module_check']['description'] = t('The pub_mpx module cannot be enabled while the pub_theplatform module is enabled.');
+  $requirements['pub_mpx_module_check']['severity'] = module_exists('pub_theplatform') ? REQUIREMENT_ERROR : REQUIREMENT_OK;
+
+  return $requirements;
+}
+//*/
+
+/**
+ * Implements hook_requirements().
+ */
+function pub_mpx_requirements($phase) {
+
+  $requirements = array();
+  if ($phase == 'runtime') {
+
+    $query = db_select('file_managed', 'fm');
+    $query->fields('fm');
+    $query->leftJoin('mpx_video', 'mv', 'mv.fid = fm.fid');
+    $query->condition('fm.type', 'mpx_video%', 'LIKE');
+    $query->isNull('mv.fid');
+    $result = $query->execute()->fetchAll();
+    $ids = array();
+    foreach ($result as $key => $value) {
+      $ids[] = $value->fid;
+    }
+    $ids_string = !empty($ids) ? implode(', ', $ids) : 'N/A';
+
+    if ($result) {
+      $count = count($result);
+      $message = t("There are !count MPX Video records ( fid: !ids_string ) in file_managed table without corresponding records in mpx_video table.",
+        array('!count' => $count, '!ids_string' => $ids_string)
+      );
+      $requirements['incomplete_mpx_video_records'] = array(
+        'title' => t('Incomplete MPX Video data'),
+        'description' => t('Faulty videos have been excluded from the views.'),
+        'value' => check_plain($message),
+        'severity' => REQUIREMENT_WARNING,
+      );
+    }
+
+    $query = db_select('file_managed', 'fm');
+    $query->fields('fm');
+    $query->leftJoin('mpx_player', 'mp', 'mp.fid = fm.fid');
+    $query->condition('fm.type', 'mpx_player%', 'LIKE');
+    $query->isNull('mp.fid');
+    $result = $query->execute()->fetchAll();
+    $ids = array();
+    foreach ($result as $key => $value) {
+      $ids[] = $value->fid;
+    }
+    $ids_string = !empty($ids) ? implode(', ', $ids) : 'N/A';
+
+    if ($result) {
+      $count = count($result);
+      $message = t("There are !count MPX Player records ( fid: !ids_string ) in file_managed table without corresponding records in mpx_player table.",
+        array('!count' => $count, '!ids_string' => $ids_string)
+      );
+      $requirements['incomplete_mpx_player_records'] = array(
+        'title' => t('Incomplete MPX Player data'),
+        'description' => t('Faulty players have been excluded from the views.'),
+        'value' => check_plain($message),
+        'severity' => REQUIREMENT_WARNING,
+      );
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function pub_mpx_update_dependencies() {
+
+  $dependencies = array();
+
+  // media_theplatform_mpx_update_7203 adds the columns to the mpx_video table
+  // that pub_mpx_update_7202 populates with existing field values.
+  $dependencies['pub_mpx'][7202] = array(
+    'media_theplatform_mpx' => 7203,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Implements hook_update_late_removed().
+ */
+function pub_mpx_update_last_removed() {
+  // We've removed the 7201 version of this update hook.
+  return 7201;
+}
+
+/**
+ * Perform update operations required by the multiple mpx account functionality.
+ */
+function pub_mpx_update_7200() {
+
+  // Update all mpx_video files to the file type for the newly created account,
+  // i.e. mpx_video_1.
+  db_update('file_managed')
+    ->fields(array('type' => 'mpx_video_1'))
+    ->condition('type', 'mpx_video', '=')
+    ->execute();
+
+  // Disable the feature_pub_mpx_file_types module.
+  module_disable(array('feature_pub_mpx_file_types'));
+}
+
+/**
+ * Bring all previous field-stored mpx default values into the mpx_video table.
+ * ATTENTION: All videos will be updated to populate the new mpx properties.
+ */
+function pub_mpx_update_7202() {
+
+  $result = db_query('SELECT fid FROM {mpx_video}')->fetchAll();
+
+  foreach ($result as $row) {
+    $file = file_load($row->fid);
+    $released_file_pids =_media_theplatform_mpx_flatten_multiple_value_field($file->field_mpx_released_file_pids);
+    $update_fields = array(
+      'released_file_pids' => serialize($released_file_pids),
+      'default_released_file_pid' => array_shift($released_file_pids),
+      'categories' => serialize(_media_theplatform_mpx_flatten_multiple_value_field($file->field_mpx_media_categories)),
+      'author' => $file->field_mpx_author[ LANGUAGE_NONE ][0]['value'],
+      'airdate' => $file->field_mpx_airdate[ LANGUAGE_NONE ][0]['value'],
+      'available_date' => $file->field_mpx_available_date[ LANGUAGE_NONE ][0]['value'],
+      'expiration_date' => $file->field_mpx_expiration_date[ LANGUAGE_NONE ][0]['value'],
+      'keywords' => $file->field_mpx_keywords[ LANGUAGE_NONE ][0]['value'],
+      'copyright' => $file->field_mpx_copyright[ LANGUAGE_NONE ][0]['value'],
+      'related_link' => $file->field_mpx_related_link[ LANGUAGE_NONE ][0]['value'],
+      'vchip_rating' => $file->field_mpx_vchip_rating[ LANGUAGE_NONE ][0]['value'],
+      // The rest of the rating and sub-rating fields did not previously exist.
+      'exclude_countries' => $file->field_mpx_exclude_countries[ LANGUAGE_NONE ][0]['value'],
+      'countries' => serialize(_media_theplatform_mpx_flatten_multiple_value_field($file->field_mpx_countries)),
+    );
+    $update_result = db_update('mpx_video')
+      ->fields($update_fields)
+      ->condition('fid', $row->fid, '=')
+      ->execute();
+  }
+
+  // Update the existing (and add the new) default mpx field bases and instances.
+  foreach (_pub_mpx_default_mpx_field_bases() as $field_name => $field_data) {
+    if (!field_info_field($field_name)) {
+      field_create_field($field_data);
+      // Re-call field_info_field() to re-populate the (un)known fields cache
+      // that's breaking things so badly.
+      field_info_field($field_name);
+    }
+    else {
+      field_update_field($field_data);
+      // Re-call field_info_field() to re-populate the (un)known fields cache
+      // that's breaking things so badly.
+      field_info_field($field_name);
+    }
+  }
+  $video_file_types = _pub_mpx_get_mpx_account_video_file_types();
+  $mpx_file_field_instances = _pub_mpx_default_mpx_field_instances();
+  foreach ($video_file_types as $bundle_name => $file_type) {
+    foreach ($mpx_file_field_instances as $field_name => $instance_data) {
+      $instance_data['bundle'] = $bundle_name;
+      if (!field_info_instance('file', $field_name, $bundle_name)) {
+        field_create_instance($instance_data);
+      }
+      else {
+        field_update_instance($instance_data);
+      }
+    }
+  }
+
+  // Set the last_notification field to NULL in the mpx_accounts table to
+  // start up an update on all videos on the next cron - necessary to populate
+  // the new properties and for the player to work now that the new
+  // field_mpx_main_released_file_pid is now used for theming videos.
+  db_update('mpx_accounts')
+    ->fields(array('last_notification' => NULL))
+    ->execute();
+}
+
+/**
+ * Clears all file entity default mpx field values to fix duplicate value issue.
+ */
+function pub_mpx_update_7203(&$sandbox) {
+
+  $mpx_videos = array();
+  $default_mpx_field_names = array_keys(_pub_mpx_default_mpx_field_bases());
+
+  if (!isset($sandbox['last_mpx_video_fid_processed'])) {
+    $sandbox['last_mpx_video_fid_processed'] = 0;
+
+    $last_fid_query = db_select('mpx_video', 'mpx_video');
+    $last_fid_query->fields('mpx_video', array('fid'));
+    $last_fid_query->orderBy('fid', 'DESC');
+    $last_fid_query->range(0, 1);
+    $sandbox['final_mpx_video_fid'] = reset($last_fid_query->execute()->fetchAssoc());
+  }
+
+  $mpx_video_query = db_select('mpx_video', 'mpx_video');
+  $mpx_video_query->leftJoin('file_managed', 'file_managed', 'mpx_video.fid = file_managed.fid');
+  $mpx_video_query->fields('mpx_video', array('fid'));
+  $mpx_video_query->fields('file_managed', array('type'));
+  $mpx_video_query->orderBy('fid', 'ASC');
+  $mpx_video_query->where('mpx_video.fid > :last_fid_processed',
+    array(':last_fid_processed' => $sandbox['last_mpx_video_fid_processed']));
+  $mpx_video_query->range(0, 50);
+  $mpx_video_query_result = $mpx_video_query->execute();
+
+  foreach ($mpx_video_query_result as $row) {
+    $file = new stdClass();
+    $file->fid = $row->fid;
+    $file->type = $row->type;
+    foreach ($default_mpx_field_names as $field_name) {
+      $file->{$field_name} = array();
+    }
+    field_attach_presave('file', $file);
+    field_attach_update('file', $file);
+    $sandbox['last_mpx_video_fid_processed'] = $file->fid;
+  }
+
+  $sandbox['#finished'] = $sandbox['last_mpx_video_fid_processed'] == $sandbox['final_mpx_video_fid'];
+
+  if ($sandbox['#finished']) {
+    return t('All MPX video files have had their field values cleared');
+  }
+}
+
+/**
+ * Upping default mpx entity field length limits to handle maximum field lengths
+ * allowed in thePlatform.
+ */
+function pub_mpx_update_7204() {
+
+  foreach (_pub_mpx_default_mpx_field_bases() as $field_name => $field_data) {
+
+    if ($field_data['type'] != 'datestamp' && $field_data['type'] != 'list_boolean' && field_info_field($field_name)) {
+
+      // Field API doesn't allow changing a field's type, as it "possibly
+      // means changing the data schema ('columns')"
+      // @see  https://drupal.org/comment/4876776#comment-4876776
+      // This is not the case for this change, and in the best interests of
+      // data consistency between mpx properties and overrides, I'm
+      // proceeding with this hack.
+      $field_config_data = db_select('field_config', 'f')
+        ->fields('f', array('data'))
+        ->condition('field_name', $field_name, '=')
+        ->execute()
+        ->fetchField();
+      $field_config_data = unserialize($field_config_data);
+      if (isset($field_data['settings']['max_length'])) {
+        $field_config_data['settings']['max_length'] = $field_data['settings']['max_length'];
+      }
+      else {
+        unset($field_config_data['settings']['max_length']);
+      }
+      db_update('field_config')
+        ->fields(array(
+            'type' => $field_data['type'],
+            'data' => serialize($field_config_data),
+          ))
+        ->condition('field_name', $field_name, '=')
+        ->execute();
+
+      $field_changes = array();
+
+      switch ($field_data['module'] . ':' . $field_data['type']) {
+
+        case 'text:text':
+          $field_changes = array(
+            'type' => 'varchar',
+            'length' => isset($field_data['settings']['max_length']) ? $field_data['settings']['max_length'] : 255,
+          );
+          break;
+
+        case 'text:text_long':
+          $field_changes = array(
+            'type' => 'text',
+            'size' => 'big',
+          );
+          break;
+      }
+
+      if ($field_changes) {
+        db_change_field('field_data_' . $field_name,
+          $field_name . '_value',
+          $field_name . '_value',
+          $field_changes
+        );
+        db_change_field('field_revision_' . $field_name,
+          $field_name . '_value',
+          $field_name . '_value',
+          $field_changes
+        );
+      }
+    }
+  }
+
+  $video_file_types = _pub_mpx_get_mpx_account_video_file_types();
+  $mpx_file_field_instances = _pub_mpx_default_mpx_field_instances();
+
+  foreach ($video_file_types as $bundle_name => $file_type) {
+    foreach ($mpx_file_field_instances as $field_name => $instance_data) {
+      if ($full_instance_data = field_info_instance('file', $field_name, $bundle_name)) {
+        // We're only interested in changing field types.
+        $full_instance_data['widget'] = array_merge($full_instance_data['widget'], $instance_data['widget']);
+        field_update_instance($full_instance_data);
+      }
+    }
+  }
+}
+
+/**
+ * Clean up problem player_ids in the mpx Video table.
+ */
+function pub_mpx_update_7205() {
+  // During a period of time (short), mpx video player_ids were being saved with
+  // the lower bound of their datatype (signed int).  This cleans up those records.
+  $lower_bound = -2147483648;
+  $update = db_update('mpx_video')
+    ->fields(array(
+      'player_id' => NULL,
+    ))
+    ->condition('player_id', $lower_bound, '=')
+    ->execute();
+}

@@ -1,0 +1,7 @@
+name = Pub Report Client
+description = Reports the current Publisher status--Publisher version, modules enabled, etc.
+core = 7.x
+package = Publisher
+project = pub_report_client
+php = 5.2.4
+version = 7.x-2.0

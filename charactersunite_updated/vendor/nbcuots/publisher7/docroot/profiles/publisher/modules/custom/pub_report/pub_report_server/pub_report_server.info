@@ -1,0 +1,11 @@
+name = Pub Report Server
+description = Gather reports form sites through an API.
+core = 7.x
+package = Publisher
+project = pub_report_server
+php = 5.2.4
+version = 7.x-2.0
+dependencies[] = entity
+dependencies[] = views
+files[] = views/pub_report_server_handler_filter_sitename.inc
+files[] = views/pub_report_server_handler_filter_modules.inc

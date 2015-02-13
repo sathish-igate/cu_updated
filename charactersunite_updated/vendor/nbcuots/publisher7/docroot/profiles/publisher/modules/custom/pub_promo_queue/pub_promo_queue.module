@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Promo Queue feature.
+ */
+
+include_once 'pub_promo_queue.features.inc';

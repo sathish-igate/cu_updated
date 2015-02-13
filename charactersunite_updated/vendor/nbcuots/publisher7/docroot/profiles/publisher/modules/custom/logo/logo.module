@@ -1,0 +1,675 @@
+<?php
+
+/**
+ * @file
+ * Implements the Logo entity and handles create, edit, delete and display
+ * functionality.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function logo_entity_info() {
+  $types['logo'] = array(
+    'label' => t('Logo'),
+    'base table' => 'logo',
+    'controller class' => 'LogoController',
+    // If fieldable == FALSE, we can't attach fields.
+    'fieldable' => 'TRUE',
+    // entity_keys tells the controller what database fields are used as the
+    // unique primary key.
+    'entity keys' => array(
+      'id' => 'lid',
+    ),
+     // FALSE disables caching. Caching functionality is handled by Drupal
+     // core.
+    'static cache' => TRUE,
+    'required' => TRUE,
+    'bundles' => array(
+      'logo' => array(
+        'label' => 'Logo',
+        // The 'admin' key is used by the Field UI to provide field and
+        // display UI pages.
+        'admin' => array(
+          'path' => 'admin/structure/logo/manage',
+          'access arguments' => array('administer logo'),
+        ),
+      ),
+    ),
+    'view modes' => array(
+      'full' => array(
+        'label' => t('Full content'),
+        'custom settings' => FALSE,
+      ),
+    ),
+  );
+
+  return $types;
+}
+
+/**
+ * Controller class for Logo Entity.
+ */
+class LogoController extends DrupalDefaultEntityController {
+
+  /**
+   * LogoController Save method.
+   *
+   * @param Entity $entity
+   *   logo entity.
+   *
+   * @return Entity
+   *   The save logo entity.
+   */
+  public function save($entity) {
+
+    // Invoke hook_entity_presave().
+    module_invoke_all('entity_presave', $entity, 'logo');
+    // The 'primary_keys' argument determines whether this will be an insert
+    // or an update. So if the entity already has an ID, we'll specify
+    // lid as the key.
+    $primary_keys = isset($entity->lid) ? 'lid' : array();
+
+    // Write out the entity record.
+    drupal_write_record('logo', $entity, $primary_keys);
+
+    // We're going to invoke either hook_entity_update() or
+    // hook_entity_insert(), depending on whether or not this is a
+    // new entity. We'll just store the name of hook_entity_insert()
+    // and change it if we need to.
+    $invoke_hook = 'entity_insert';
+
+    // Now we need to either insert or update the fields which are
+    // attached to this entity. We use the same primary_keys logic
+    // to determine whether to update or insert, and which hook we
+    // need to invoke.
+    if (empty($primary_keys)) {
+      field_attach_insert('logo', $entity);
+    }
+    else {
+      field_attach_update('logo', $entity);
+      $invoke_hook = 'entity_update';
+    }
+
+    // Invoke either hook_entity_update() or hook_entity_insert().
+    module_invoke_all($invoke_hook, $entity, 'logo');
+
+    return $entity;
+  }
+
+  /**
+   * Delete a logo entity.
+   *
+   * @param object $entity
+   *   The entity to be deleted.
+   */
+  public function delete($entity) {
+    $this->delete_multiple(array($entity));
+  }
+
+  /**
+   * Delete a set of logo entities.
+   *
+   * @param array $entities
+   *   An array of logo entities to be deleted.
+   */
+  public function delete_multiple($entities) {
+    $lids = array();
+    if (!empty($entities)) {
+      foreach ($entities as $entity) {
+        // Invoke hook_entity_delete().
+        module_invoke_all('entity_delete', $entity, 'logo');
+        // Delete field data for an existing entity. This deletes all revisions
+        // of field data for the entity.
+        field_attach_delete('logo', $entity);
+        $lids[] = $entity->lid;
+      }
+      db_delete('logo')
+        ->condition('lid', $lids, 'IN')
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Returns a complete Logo entity object.
+ *
+ * @param int $lid
+ *   Integer specifying the lid [entity id].
+ * @param bool $reset
+ *   (optional)
+ *
+ * @return mixed
+ *   A $logo object or FALSE if it cannot be loaded.
+ */
+function logo_load($lid = NULL, $reset = FALSE) {
+  $lids = (isset ($lid) ? array($lid) : array());
+  $logo = logo_load_multiple($lids, $reset);
+
+  return $logo ? reset($logo) : FALSE;
+}
+
+/**
+ * Loads multiple logo entity objects.
+ *
+ * @param array|bool $lids
+ *   (optional) Array of integers specifying the lid(s) [entity id] to load.
+ *   If the array is empty, all entity objects will be loaded.
+ * @param array $conditions
+ *   (optional)
+ * @param bool $reset
+ *   (optional)
+ *
+ * @return mixed
+ *   An array of $logo objects, a single logo object if only
+ *   one is loaded, or FALSE no objects are loaded.
+ */
+function logo_load_multiple($lids = FALSE, $conditions = array(), $reset = FALSE) {
+  return entity_load('logo', $lids, $conditions, $reset);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function logo_menu() {
+  $items['admin/structure/logo/manage'] = array(
+    'title' => 'Logo Admin',
+    'description' => 'Manage logo structure',
+    'page callback' => 'logo_info',
+    'access arguments' => array('administer logo'),
+  );
+
+  // Hack to get the add in the admin menu.
+  $items['admin/content/logos/add'] = array(
+    'title' => 'Add Logo',
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('logo/add', array(), '301'),
+    'access arguments' => array('administer logo'),
+  );
+
+  // View logo entity.
+  $items['logo/%logo'] = array(
+    'title callback' => 'logo_page_title',
+    'title arguments' => array(1),
+    'page callback' => 'logo_page_view',
+    'page arguments' => array(1),
+    'access arguments' => array('administer logo'),
+    'type' => MENU_CALLBACK,
+  );
+  // Add logo entity.
+  $items['logo/add'] = array(
+    'title' => 'Add Logo',
+    'page callback' => 'logo_add',
+    'access arguments' => array('administer logo'),
+  );
+  // Edit logo entity.
+  $items['logo/edit/%logo'] = array(
+    'title' => 'Edit',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('logo_form', 2),
+    'access arguments' => array('administer logo'),
+    'type' => MENU_CALLBACK,
+  );
+  // Delete logo entity.
+  $items['logo/delete/%logo'] = array(
+    'title' => 'Delete Logo',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('logo_delete_confirm', 2),
+    'access arguments' => array('administer logo'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function logo_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  // Add action link to 'logo/add' on 'admin/content/logos' page.
+  if ($root_path == 'admin/content/logos') {
+    $item = menu_get_item('logo/add');
+    if ($item['access']) {
+      $data['actions']['output'][] = array(
+        '#theme' => 'menu_local_action',
+        '#link' => $item,
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function logo_permission() {
+  return array(
+    'administer logo' => array(
+      'title' => t('Administer logo'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_info().
+ */
+function logo_info() {
+  return t('Welcome to the administration page for your logo.');
+}
+
+/**
+ * Callback for a Page title.
+ *
+ * @param object $logo
+ *   A logo entity object.
+ *
+ * @return string
+ *   Returns title.
+ */
+function logo_page_title($logo) {
+  return $logo->title;
+}
+
+/**
+ * Implements the display view functionality.
+ *
+ * @param object $logo
+ *   An object loads from logo_load().
+ * @param string $view_mode
+ *   (optional)
+ *
+ * @return string
+ *   Content for logo page.
+ */
+function logo_page_view($logo, $view_mode = 'full') {
+  $logo->content = array();
+
+  // Build content fields.
+  field_attach_prepare_view('logo', array($logo->lid => $logo), $view_mode);
+  entity_prepare_view('logo', array($logo->lid => $logo));
+  $logo->content += field_attach_view('logo', $logo, $view_mode);
+
+  return $logo->content;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ *
+ * This exposes the "extra fields" of the entity displays in 'Manage Fields'
+ * and 'Manage Display'. Logo file upload is added during hook_install().
+ */
+function logo_field_extra_fields() {
+  $return = array();
+  $return['logo']['logo'] = array(
+    'form' => array(
+      'title' => array(
+        'label' => t('Title'),
+        'description' => t('Logo Title'),
+        'weight' => 0,
+      ),
+      'start' => array(
+        'label' => t('Start'),
+        'description' => t('Start Date'),
+        'weight' => 1,
+      ),
+      'end' => array(
+        'label' => t('End'),
+        'description' => t('End Date'),
+        'weight' => 2,
+      ),
+    ),
+    'display' => array(
+      'title' => array(
+        'label' => t('Title'),
+        'description' => t('Title'),
+        'widget' => array(
+          'type' => 'image_image',
+        ),
+        'weight' => 0,
+      ),
+      'start' => array(
+        'label' => t('Start'),
+        'description' => t('Start Date'),
+        'weight' => 1,
+      ),
+      'end' => array(
+        'label' => t('End'),
+        'description' => t('End Date'),
+        'weight' => 2,
+      ),
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Create a Logo.
+ */
+function logo_add() {
+  $logo = (object) array(
+    'lid' => '',
+    'type' => 'logo',
+    'title' => '',
+    'start' => '',
+    'end' => '',
+  );
+
+  return drupal_get_form('logo_form', $logo);
+}
+
+/**
+ * Form builder for logo/edit/%logo.
+ *
+ * @see logo_menu()
+ */
+function logo_form($form, &$form_state, $logo) {
+  $form['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#required' => TRUE,
+    '#default_value' => isset($logo->title) ? $logo->title : '',
+    '#weight' => 1,
+  );
+
+  $default_start = '';
+  if (!empty($logo->start)) {
+    $default_start = date('Y-m-d H:i:s', $logo->start);
+  }
+
+  $form['start'] = array(
+    '#type' => 'date_popup',
+    '#title' => t('Start'),
+    '#date_format' => 'Y-m-d h:i:s a',
+    '#required' => FALSE,
+    '#default_value' => $default_start,
+    '#weight' => 2,
+  );
+
+  $default_end = '';
+  if (!empty($logo->end)) {
+    $default_end = date('Y-m-d H:i:s', $logo->end);
+  }
+
+  $form['end'] = array(
+    '#type' => 'date_popup',
+    '#title' => t('End'),
+    '#date_format' => 'Y-m-d h:i:s a',
+    '#required' => FALSE,
+    '#default_value' => $default_end,
+    '#weight' => 3,
+  );
+  if (!empty($logo->lid)) {
+    $form['lid'] = array(
+      '#type' => 'value',
+      '#value' => $logo->lid,
+      '#weight' => 9,
+    );
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#weight' => 10,
+  );
+  // Attach the image upload field for uploading the logo.
+  field_attach_form('logo', $logo, $form, $form_state);
+
+  return $form;
+}
+
+/**
+ * Form submission handler for logo_form().
+ */
+function logo_form_submit($form, &$form_state) {
+  $logo_submission = (object) $form_state['values'];
+  $logo_submission->start = strtotime($form_state['values']['start']);
+  $logo_submission->end = strtotime($form_state['values']['end']);
+
+  // If the active logo dates are changed then turn off the active logo.
+  $now = time();
+  $active_logo = variable_get('logo_override_path', '');
+  $logo = isset($logo_submission->lid) ? logo_load($logo_submission->lid) : '';
+  if (!empty($logo) && ($logo->field_logo['und'][0]['uri'] == $active_logo)) {
+    if (!(($logo_submission->start < $now) && ($now < $logo_submission->end))) {
+      logo_turn_off($logo->lid);
+    }
+  }
+
+  field_attach_submit('logo', $logo_submission, $form, $form_state);
+  logo_save($logo_submission);
+  $form_state['redirect'] = "admin/content/logos";
+}
+
+/**
+ * Form validation handler for logo_form().
+ */
+function logo_form_validate($form, &$form_state) {
+  $logo_submission = (object) $form_state['values'];
+
+  $logo_submission->start = strtotime($form_state['values']['start']);
+  $logo_submission->end = strtotime($form_state['values']['end']);
+  $today = time();
+
+  // Validate that the start date is not earlier than today.
+  if (!empty($logo_submission->start) && $logo_submission->start < $today) {
+    form_set_error('start', t('Start date cannot occur in the past.'));
+  }
+
+  // Validate that the end date is later than the start date.
+  if ($logo_submission->end < $logo_submission->start) {
+    form_set_error('start', t('The end date must occur after the start date.'));
+  }
+
+  // Validate that two scheduled logos never have overlapping dates.
+  if (!empty($logo_submission->start) && !empty($logo_submission->end)) {
+    $query = db_select('logo');
+    $query->addField('logo', 'lid');
+    $db_and_1 = db_and()->condition('start', $logo_submission->start, '<=')->condition('end', $logo_submission->start, '>=');
+    $db_and_2 = db_and()->condition('end', $logo_submission->end, '>=')->condition('start', $logo_submission->end, '<=');
+    $db_and_3 = db_and()->condition('start', $logo_submission->start, '>')->condition('end', $logo_submission->end, '<');
+
+    $db_or = db_or()->condition($db_and_1)->condition($db_and_2)->condition($db_and_3)->condition('end', $logo_submission->start, '=');
+    $query->condition($db_or);
+    if (!empty($logo_submission->lid)) {
+      $query->condition('lid', $logo_submission->lid, '!=');
+    }
+
+    $result = $query->execute()->fetchField();
+
+    if (!empty($result)) {
+      form_set_error('start', t('Another logo is already scheduled to be active during that time period.'));
+    }
+  }
+
+  // Call any validation functions that might be attached to the logo upload
+  // form.
+  field_attach_form_validate('logo', $logo_submission, $form, $form_state);
+}
+
+
+/**
+ * Save the given logo.
+ */
+function logo_save(&$logo) {
+  return entity_get_controller('logo')->save($logo);
+}
+
+/**
+ * Display a confirmation form when a user attempts to delete a logo.
+ */
+function logo_delete_confirm($form, &$form_state, $logo) {
+  $form['_logo'] = array(
+    '#type' => 'value',
+    '#value' => $logo,
+  );
+
+  return confirm_form($form,
+    t('Are you sure you want to delete this logo?'),
+    isset($_GET['destination']) ? $_GET['destination'] : "admin/content/logos",
+    t('This action cannot be undone.'),
+    t('Delete'),
+    t('Cancel'));
+}
+
+/**
+ * Submit function for delete confirm form.
+ */
+function logo_delete_confirm_submit($form, &$form_state) {
+  if ($form_state['values']['confirm']) {
+    $logo = $form_state['values']['_logo'];
+    entity_get_controller('logo')->delete($logo);
+    drupal_set_message(t('Logo has been deleted successfully.'));
+  }
+  drupal_goto("admin/content/logos");
+}
+
+/**
+ * Implements hook_cron().
+ */
+function logo_cron() {
+  $active_logo = logo_get_active();
+  $today = time();
+  if ($active_logo) {
+    if (($active_logo->end < $today) && logo_turn_off($active_logo->lid)) {
+      logo_turn_on();
+    }
+  }
+  else {
+    logo_turn_on();
+  }
+}
+
+/**
+ * Turn on logo.
+ */
+function logo_turn_on($lid = '') {
+  $started = FALSE;
+  $today = time();
+
+  if (!empty($lid)) {
+    $logo = logo_load($lid);
+  }
+  else {
+    // Check if a logo is scheduled to start. If so, load that logo.
+    $query = db_select('logo');
+    $query->addField('logo', 'lid');
+    $and = db_and()->condition('start', $today, '<=')->condition('end', $today, '>=');
+    $query->condition($and);
+    $result = $query->execute()->fetchField();
+
+    if (!empty($result)) {
+      $logo = logo_load($result);
+    }
+  }
+
+  if (isset($logo) && isset($logo->field_logo) && !empty($logo->field_logo['und'][0]['uri'])) {
+    $override = $logo->field_logo['und'][0]['uri'];
+    variable_set('logo_override_path', $override);
+    $started = TRUE;
+  }
+
+  return $started;
+}
+
+/**
+ * Turn off active logo.
+ */
+function logo_turn_off($lid) {
+  $ended = FALSE;
+
+  $logo = logo_load($lid);
+  if ($logo) {
+    // Update the start and end dates to null.
+    $update_query = db_update('logo');
+    $update_query->condition('lid', $lid);
+    $update_query->fields(array('start' => 0, 'end' => 0));
+    $update_query->execute();
+    variable_set('logo_override_path', '');
+    $ended = TRUE;
+  }
+
+  return $ended;
+}
+
+/**
+ * Get the active logo.
+ */
+function logo_get_active() {
+  $active_logo = variable_get('logo_override_path');
+
+  if (!empty($active_logo)) {
+    $query = db_select('logo', 'l');
+    $query->join('field_data_field_logo', 'dl', 'l.lid=dl.entity_id');
+    $query->join('file_managed', 'f', 'dl.field_logo_fid = f.fid');
+    $query->fields('l');
+    $query->condition('uri', $active_logo);
+    $logo = $query->execute()->fetchObject();
+    return $logo;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements template_process_page().
+ */
+function logo_process_page(&$variables) {
+  // Display the Logo based on the specified dates or default one.
+  $logo_override_path = variable_get('logo_override_path');
+  if (!empty($logo_override_path)) {
+    $variables['logo'] = file_create_url($logo_override_path);
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function logo_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'logo') . '/views',
+  );
+}
+
+
+/**
+ * Implements hook_image_default_styles().
+ */
+function logo_image_default_styles() {
+  $styles = array();
+
+  // Exported image style: logo_thumbnail.
+  $styles['logo_thumbnail'] = array(
+    'name' => 'logo_thumbnail',
+    'effects' => array(
+      1 => array(
+        'label' => 'Scale and crop',
+        'help' => 'Cropping will remove portions of an image to make it the specified dimensions.',
+        'effect callback' => 'image_scale_and_crop_effect',
+        'dimensions callback' => 'image_resize_dimensions',
+        'form callback' => 'image_scale_and_crop_form',
+        'summary theme' => 'image_scale_and_crop_summary',
+        'module' => 'image',
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => '63',
+          'height' => '75',
+          'anchor' => 'center-center',
+        ),
+        'weight' => '1',
+      ),
+    ),
+  );
+
+  return $styles;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function logo_admin_paths() {
+  $paths = array(
+    'logo/*' => TRUE,
+  );
+
+  return $paths;
+}

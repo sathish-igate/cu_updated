@@ -1,0 +1,69 @@
+<?php
+
+/**
+ * @file
+ * Forces users to login with an e-mail address instead of their username.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function email_login_form_user_pass_alter(&$form, &$form_state, $form_id) {
+  $form['name']['#title'] = t('E-mail');
+  $form['name']['#description'] = t('A password reset message will be sent to your e-mail address.');
+  $form['name']['#element_validate'][] = 'email_login_pass_recovery_validate';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function email_login_form_user_login_alter(&$form, &$form_state, $form_id) {
+  $form['name']['#title'] = t('E-mail');
+  $form['name']['#description'] = t('Enter your e-mail address.');
+  $form['name']['#element_validate'][] = 'email_login_user_login_validate';
+  $form['pass']['#description'] = t('Enter the password that accompanies your e-mail.');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function email_login_form_user_login_block_alter(&$form, &$form_state, $form_id) {
+  $form['name']['#title'] = t('E-mail');
+  $form['name']['#element_validate'][] = 'email_login_user_login_validate';
+}
+
+/**
+ * Form validation handler for user_login().
+ *
+ * Allows users to authenticate by email, which is our preferred method.
+ */
+function email_login_user_login_validate($form, &$form_state) {
+  $email = $form_state['values']['name'];
+  if (isset($email)) {
+    if ($user = user_load_by_mail($email)) {
+      $form_state['values']['name'] = $user->name;
+    }
+    else {
+      form_set_error('name', t('Sorry, unrecognized username or password. <a href="@password">Have you forgotten your password?</a>', array('@password' => url('user/password'))));
+      watchdog('user', 'Login attempt failed for %user.', array('%user' => $email));
+    }
+  }
+}
+
+/**
+ * Form validation handler for pass_recovery().
+ *
+ * Only accept an email address, no usernames.
+ */
+function email_login_pass_recovery_validate($form, &$form_state) {
+  $email = $form_state['values']['name'];
+  if (isset($email)) {
+    if ($user = user_load_by_mail($email)) {
+      $form_state['values']['name'] = $user->name;
+    }
+    else {
+      form_set_error('name', t('Sorry, %email is not recognized as an e-mail address.', array('%email' => $email)));
+      watchdog('user', 'Login attempt failed for %user.', array('%user' => $email));
+    }
+  }
+}

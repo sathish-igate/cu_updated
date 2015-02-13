@@ -1,0 +1,12 @@
+name = Publisher API Server
+description = Custom REST server for Pub7 sites.
+core = 7.x
+php = 5.3
+package = Publisher
+dependencies[] = entity
+dependencies[] = rest_server
+files[] = services/PubRESTServerFactory.php
+files[] = services/PubServer.php
+files[] = services/PubServerJSONFormatter.php
+files[] = services/PubServicesContentTypeNegotiator.php
+files[] = resources/PubAPIResource.php

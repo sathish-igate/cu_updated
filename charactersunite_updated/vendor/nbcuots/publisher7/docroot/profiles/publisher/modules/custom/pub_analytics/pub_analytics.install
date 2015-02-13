@@ -1,0 +1,151 @@
+<?php
+/**
+ * @file
+ * Install file for pub_analytics.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function pub_analytics_install() {
+  // Get the current URI from the drush aliases file.
+  $conf_path_split = explode('/', conf_path());
+  $site_shortname = array_pop($conf_path_split);
+  @include 'sites/all/drush/' . $site_shortname . '.aliases.drushrc.php';
+  $uri = isset($aliases['local']['uri']) ? $aliases['local']['uri'] : 'this-site.com';
+
+  // First set the global sitecatalyst settings.
+  variable_set('sitecatalyst_report_suite_id', $site_shortname);
+  variable_set('sitecatalyst_js_file_location', '/' . drupal_get_path('module', 'pub_analytics') . '/js/s_code.js');
+  variable_set('sitecatalyst_image_file_location', '');
+  variable_set('sitecatalyst_version', 'H 24.');
+
+  // Just in case, we grab any existing sitecatalyst variables first.
+  $variables = variable_get('sitecatalyst_variables', array());
+  $variables[] = array(
+    'name' => 's.pageName',
+    'value' => '[current-page:title]',
+  );
+  $variables[] = array(
+    'name' => 's.channel',
+    'value' => '[current-page:url:args:first]',
+  );
+  $variables[] = array(
+    'name' => 's.linkInternalFilters',
+    'value' => 'javascript:,' . $uri,
+  );
+  $variables[] = array(
+    'name' => 's.prop1',
+    'value' => '[current-user:roles]',
+  );
+  $variables[] = array(
+    'name' => 's.prop2',
+    'value' => '[current-page:url:args:first]',
+  );
+  $variables[] = array(
+    'name' => 's.prop3',
+    'value' => '[node:content-type:name]',
+  );
+  $variables[] = array(
+    'name' => 's.prop4',
+    'value' => '[current-page:title]',
+  );
+  $variables[] = array(
+    'name' => 's.prop6',
+    'value' => '[current-page:url:absolute]',
+  );
+
+  variable_set('sitecatalyst_variables', $variables);
+
+  pub_analytics_update_7002();
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function pub_analytics_requirements($phase) {
+  $t = get_t();
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    $not_set = variable_get('sitecatalyst_report_suite_id', '') == '';
+
+    // The 'sitecatalyst_report_suite_id' variable must have a value.
+    $requirements['sitecatalyst_rs_id'] = array(
+      'title' => $t('SiteCatalyst Report Suite ID'),
+      'value' => variable_get('sitecatalyst_report_suite_id', ''),
+      'description' => $not_set ? $t('The <a href="@url">SiteCatalyst Report Suite ID</a> has-not been set.', array('@url' => '/admin/config/system/sitecatalyst')) : '',
+      'severity' => $not_set ? REQUIREMENT_ERROR : REQUIREMENT_OK,
+    );
+
+    if (module_exists('tve_analytics')) {
+      $requirements['tve_analytics_should_die'] = array(
+        'title' => $t('Publisher Analytics'),
+        'value' => $t('Conflict'),
+        'description' => $t('You still have the tve_analytics module installed. All of that functionality of that module has been moved into pub_analytics so you should disable tve_analytics immediately.'),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+
+  }
+
+  return $requirements;
+}
+
+/**
+ * Make changes needed when the Omniture module was renamed SiteCatalyst.
+ */
+function pub_analytics_update_7000() {
+  if (!module_exists('sitecatalyst')) {
+    module_enable(array('sitecatalyst'));
+  }
+}
+
+/**
+ * Prepend a slash to the sitecatalyst_js_file_location variable.
+ */
+function pub_analytics_update_7001() {
+  if ($current_variable = variable_get('sitecatalyst_js_file_location')) {
+    $first_char = substr($current_variable, 0, 1);
+    $first_char != '/' ? variable_set('sitecatalyst_js_file_location', '/' . $current_variable) : NULL;
+  }
+}
+
+/**
+ * Add analytics data for TVE.
+ */
+function pub_analytics_update_7002() {
+  // Just in case, we grab any existing sitecatalyst variables first.
+  $variables = variable_get('sitecatalyst_variables', array());
+  $variables[] = array(
+    'name' => 's.contextData["tve_domain"]',
+    'value' => '',
+  );
+  variable_set('sitecatalyst_variables', $variables);
+
+  $script = variable_get('sitecatalyst_codesnippet', '');
+  // @todo: jQuery.browser was deprecated in jquery v1.3 and removed in 1.9
+  $script .= 's.contextData["tve_platform"] = jQuery.browser.mobile ? "Mobile" : "PC";';
+  // @todo: is this too site-specific? What if a site puts its TVE content
+  // somewhere other than "/now"
+  $script .= 'if(document.domain.indexOf("nbcuxd.com") > -1 || location.href.indexOf("/now") > -1 || document.domain.indexOf("nbcuni.com") > -1) {';
+  $script .= '  s_account = Drupal.settings.analytics.tveSuiteId;';
+  $script .= '}';
+  variable_set('sitecatalyst_codesnippet', $script);
+
+  // Yell if the tve_analytics module is installed.
+  if (module_exists('tve_analytics')) {
+    drupal_set_message(t('You still have the tve_analytics module installed. All of that functionality of that module has been moved into pub_analytics so you should disable tve_analytics immediately.'));
+    watchdog('Publisher', 'Pub Analytics has been updated to support TVE so you should remove the tve_analytics module.');
+  }
+}
+
+/**
+ * Ensure the sitecatalyst file location is properly set.
+ */
+function pub_analytics_update_7003() {
+  $sitecatalyst_js_file_location = variable_get('sitecatalyst_js_file_location', '');
+  if (strpos($sitecatalyst_js_file_location, 'profiles/all/modules') !== FALSE) {
+    variable_set('sitecatalyst_js_file_location', '/' . drupal_get_path('module', 'pub_analytics') . '/js/s_code.js');
+  }
+}

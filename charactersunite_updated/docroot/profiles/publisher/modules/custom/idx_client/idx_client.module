@@ -1,0 +1,220 @@
+<?php
+/**
+ * @file
+ * IDX Integration module.
+ */
+
+define('IDX_CLIENT_API_URL_FIELD', 'idx_client_api_url');
+define('IDX_CLIENT_API_KEY_FIELD', 'idx_client_api_key');
+define('IDX_CLIENT_API_BRAND_ID_FIELD', 'idx_client_api_brand_id');
+define('IDX_CLIENT_BRAND_DATA', 'brand_data');
+
+/**
+ * Implements hook_menu().
+ */
+function idx_client_menu() {
+  $menu = array();
+
+  $menu['admin/config/services/idx_client'] = array(
+    'title' => 'IDX Settings',
+    'description' => "Settings for IDX service",
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('idx_client_admin_form'),
+    'access arguments' => array('administer IDX'),
+    'file' => 'idx_client.admin.inc',
+  );
+
+  return $menu;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function idx_client_permission() {
+  return array(
+    'administer IDX' => array(
+      'title' => t('Administer IDX'),
+      'description' => t("Users administer the integration with NBC's Identity Management System (IDX)."),
+    ),
+  );
+}
+
+/**
+ * Returns api url from settings.
+ *
+ * @return array
+ *   An array containing the api URL.
+ */
+function idx_client_get_api_url() {
+  return array('url' => variable_get(IDX_CLIENT_API_URL_FIELD, 'https://stage.idxapi.nbcuni.com/'));
+}
+
+/**
+ * Returns api key from settings.
+ *
+ * @return string
+ *   The API key.
+ */
+function idx_client_get_api_key() {
+  return variable_get(IDX_CLIENT_API_KEY_FIELD, '');
+}
+
+/**
+ * Returns api brand id from settings.
+ *
+ * @return string
+ *   The API brand id.
+ */
+function idx_client_get_api_brand_id() {
+  return variable_get(IDX_CLIENT_API_BRAND_ID_FIELD, '');
+}
+
+/**
+ * Returns a member data by field.
+ *
+ * @param string $member_id
+ *   A uuid, email address or username.
+ * @param string $field
+ *   A field name.
+ * @param string $provider
+ *   A provider name. Default: 'idx'.
+ *
+ * @return array|bool
+ *   Returns an array of member data, or FALSE.
+ */
+function idx_client_get_member_data($member_id, $field, $provider = 'idx') {
+  if (empty($member_id)) {
+    watchdog('IDX', 'A member ID is empty.', array(), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $idx = new IDXClientWrapper();
+  $result = $idx->memberGet($member_id, $provider);
+
+  if ($result) {
+    return $idx->getMemberData($field);
+  }
+  else {
+    watchdog('IDX', 'The member !m does not exist.', array('!m' => $member_id), WATCHDOG_WARNING);
+    return FALSE;
+  }
+}
+
+/**
+ * Sets a member data by field.
+ *
+ * @param string $member_id
+ *   A uuid, email address or username.
+ * @param string $field
+ *   A field name.
+ * @param string $value
+ *   A field value.
+ * @param string $provider
+ *   A provider name. Default: 'idx'.
+ *
+ * @return bool
+ *   Returns TRUE if the member data was set properly.
+ */
+function idx_client_set_member_data($member_id, $field, $value, $provider = 'idx') {
+  if (empty($member_id)) {
+    watchdog('IDX', 'A member ID is empty.', array(), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $idx = new IDXClientWrapper();
+  $result = $idx->memberGet($member_id, $provider);
+
+  if ($result) {
+    // If member is exist than set data and send it into IDX.
+    if ($idx->setMemberData($field, $value)) {
+      return $idx->memberPut();
+    }
+    else {
+      watchdog('IDX', 'A data was not added to the member !m into the field !f', array(
+        '!m' => $member_id,
+        '!f' => $field,
+      ), WATCHDOG_WARNING);
+      return FALSE;
+    }
+  }
+  else {
+    watchdog('IDX', 'The member !m does not exist.', array('!m' => $member_id), WATCHDOG_WARNING);
+    return FALSE;
+  }
+}
+
+/**
+ * Sets a member data into brand data field.
+ *
+ * @param string $member_id
+ *   A uuid, email address or username.
+ * @param string $field
+ *   A field name in brand data array.
+ * @param mix $value
+ *   A field value in brand data array.
+ * @param string $provider
+ *   A provider name. Default: 'idx'.
+ *
+ * @return bool
+ *   Returns TRUE if the brand data was set properly.
+ */
+function idx_client_set_member_brand_data($member_id, $field, $value, $provider = 'idx') {
+  if (empty($member_id)) {
+    watchdog('IDX', 'A member ID is empty.', array(), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $idx = new IDXClientWrapper();
+  $result = $idx->memberGet($member_id, $provider);
+
+  if ($result) {
+    // If member is exist than set data and send it into IDX.
+    if ($idx->setMemberBrandData($field, $value)) {
+      return $idx->memberPut();
+    }
+    else {
+      watchdog('IDX', 'A data was not added to the member !m into brand data field', array(
+        '!m' => $member_id,
+      ), WATCHDOG_WARNING);
+      return FALSE;
+    }
+  }
+  else {
+    watchdog('IDX', 'The member !m does not exist.', array('!m' => $member_id), WATCHDOG_WARNING);
+    return FALSE;
+  }
+}
+
+/**
+ * Returns a member array.
+ *
+ * @param string $member_id
+ *   A uuid, email address or username.
+ * @param string $provider
+ *   A provider name. Default: 'idx'.
+ * @param string $view
+ *   ('most-recent-user', 'most-recent-all', or 'best-guess')
+ *   How to filter the data on the user, defaults to most-recent-user (optional)
+ * @param string $brands
+ *   The brands to retrieve data from, defaults to all (optional)
+ *
+ * @return array|bool
+ *   An array of member data or FALSE on failure.
+ */
+function idx_client_get_member($member_id, $provider = 'idx', $view = NULL, $brands = NULL) {
+  if (empty($member_id)) {
+    watchdog('IDX', 'A member ID is empty.', array(), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $idx = new IDXClientWrapper();
+  $result = $idx->memberGet($member_id, $provider, $view, $brands);
+
+  if ($result) {
+    return $idx->getMember();
+  }
+  else {
+    watchdog('IDX', 'The member !m does not exist.', array('!m' => $member_id), WATCHDOG_WARNING);
+    return FALSE;
+  }
+}

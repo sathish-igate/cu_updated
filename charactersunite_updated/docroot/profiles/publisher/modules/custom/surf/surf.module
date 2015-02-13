@@ -1,0 +1,139 @@
+<?php
+
+/**
+ * @file
+ * SURF module file.
+ *
+ * It attaches SURF JavaScript code to the page with the appropriate
+ * configuration key.
+ */
+
+/**
+ * Implements hook_library().
+ *
+ * We include the JS via surf_page_alter().
+ */
+function surf_library() {
+
+  $libraries['jquery.tmpl'] = array(
+    'title' => 'jQuery Templates plugin',
+    'website' => 'https://github.com/BorisMoore/jquery-tmpl/',
+    'version' => '1.0.0',
+    'js' => array(
+      drupal_get_path('module', 'surf') . '/js/lib/jquery.tmpl.js' => array(
+        'type' => 'file',
+        'group' => JS_LIBRARY,
+        'scope' => 'footer',
+      ),
+    ),
+  );
+
+  $libraries['jquery.storage'] = array(
+    'title' => 'jQuery Storage plugin',
+    'website' => 'https://github.com/julien-maurel/jQuery-Storage-API/',
+    'version' => '1.5.0',
+    'js' => array(
+      drupal_get_path('module', 'surf') . '/js/lib/jquery.storageapi.min.js' => array(
+        'type' => 'file',
+        'group' => JS_LIBRARY,
+        'scope' => 'footer',
+      ),
+    ),
+  );
+
+  $libraries['surf.session'] = array(
+    'title' => 'NBCU Pub Surf Session',
+    'website' => 'http://surfexample-prod.com/',
+    'version' => '1.0',
+    'js' => array(
+      drupal_get_path('module', 'surf') . '/js/surf.session.js' => array(
+        'type' => 'file',
+        'group' => JS_LIBRARY,
+        'scope' => 'footer',
+      ),
+    ),
+    'dependencies' => array(
+      array('system', 'jquery.cookie'),
+      array('surf', 'jquery.storage'),
+    ),
+  );
+
+  $libraries['surf.pub'] = array(
+    'title' => 'NBCU Pub Surf',
+    'website' => 'http://surfexample-prod.com/',
+    'version' => '1.0',
+    'js' => array(
+      drupal_get_path('module', 'surf') . '/js/surf.pub.js' => array(
+        'type' => 'file',
+        'group' => JS_LIBRARY,
+        'scope' => 'footer',
+      ),
+    ),
+    'dependencies' => array(
+      array('surf', 'jquery.tmpl'),
+      array('surf', 'surf.session'),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Surf default Settings.
+ */
+function surf_get_settings() {
+  $data = array(
+    'responsive' => TRUE,
+    'element' => 'surf-content',
+    'smallDisplay' => 400
+  );
+
+  // Allow other modules to alter the default settings.
+  drupal_alter('surf_settings', $data);
+
+  return array('surf' => $data);
+}
+
+/**
+ * Implement hook_page_alter().
+ *
+ * Because drupal_get_js() is horrible and doesn't allow 'data-' attributes
+ * we need to include the actual surf.js here.
+ */
+function surf_page_alter(&$page) {
+
+  $page['page_bottom'] = !isset($page['page_bottom']) ? array() : $page['page_bottom'];
+
+  if (isset($page['page_bottom']) && empty($page['page_bottom']['surf'])) {
+    $surf_default_library_module = variable_get('surf_default_library_module', 'pub_surf_example');
+    $surf_default_library_name = variable_get('surf_default_library_name', 'surf.example');
+
+    $page['page_bottom']['surf'] = array(
+      'surf-external' => array(
+        '#type' => 'html_tag',
+        // Important: Drupal needs this empty value to not render an invalid
+        // script tag.
+        '#value' => '',
+        '#tag' => 'script',
+        '#attributes' => array(
+          'type' => 'text/javascript',
+          'src' => variable_get('surf_src_url', 'https://stage.surf.nbcuni.com/rdk/surf.js.php'),
+          'data-rdk-url' => variable_get('surf_rdk_url', "/rdk/"),
+          'data-config-key' => variable_get('surf_config_key', 'pubcore'),
+        ),
+      ),
+      '#attached' => array(
+        'library' => array(
+          array('surf', 'surf.pub'),
+          array($surf_default_library_module, $surf_default_library_name)
+        ),
+        'js' => array(
+          array(
+            'type' => 'setting',
+            'data' => surf_get_settings(),
+          ),
+        ),
+      )
+    );
+  }
+}

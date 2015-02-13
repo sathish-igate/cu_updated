@@ -1,0 +1,6 @@
+.pub-relationship-enhanced-wrapper .form-type-select,
+.season-wrapper,
+.episode-wrapper {
+    display: inline-block;
+    padding-right: 10px;
+}

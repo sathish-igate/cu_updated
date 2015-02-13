@@ -1,0 +1,15 @@
+name = Pub Promo Queue
+description = Promo Queues
+core = 7.x
+package = Publisher
+php = 5.2.4
+dependencies[] = entity
+dependencies[] = entityreference
+dependencies[] = features
+dependencies[] = queues
+features[features_api][] = api:2
+features[field_base][] = field_qt_promo_queue
+features[field_instance][] = queues-promo_queue-field_qt_promo_queue
+features[queues_type][] = promo_queue
+features_exclude[field][queues-promo_queue-field_qt_promo_queue] = queues-promo_queue-field_qt_promo_queue
+files[] = tests/pub_promo_queue.test

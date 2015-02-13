@@ -1,0 +1,154 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Files feature.
+ */
+
+include_once 'pub_files.features.inc';
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @see file_entity_file_type_form()
+ */
+function pub_files_form_file_entity_file_type_form_alter(&$form, $form_state) {
+  $form['extra_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Extra Settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['extra_settings']['pub_files_button_settinsg_remove_replace'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Remove the <em>replace file</em> upload form element'),
+    '#default_value' => variable_get('pub_files_button_settinsg_remove_replace', 0),
+    '#description' => t('Note: this setting is global for all file entity types.'),
+  );
+  $form['#submit'][] = 'pub_files_file_entity_file_type_form_submit';
+}
+
+/**
+ * Form submit function for the file entity type form.
+ */
+function pub_files_file_entity_file_type_form_submit($form, $form_state) {
+  variable_set('pub_files_button_settinsg_remove_replace', $form_state['values']['pub_files_button_settinsg_remove_replace']);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @see file_entity_edit()
+ */
+function pub_files_form_file_entity_edit_alter(&$form, &$form_state, $form_id) {
+  // Decide whether to show the "Replace file" field on the edit file form.
+  $form['#group_children']['replace_upload'] = 'group_image_left';
+  $form['replace_upload']['#access'] = !variable_get('pub_files_button_settinsg_remove_replace', 0);
+
+  // Move the focal point form element.
+  if (isset($form['focal_point'])) {
+    $form['#group_children']['focal_point'] = 'group_image_left';
+    $form['focal_point']['#weight'] = -100;
+
+    // Remove the default view if we can display with Focal Point.
+    $preview_file = $form['preview']['#file'];
+    unset($form['preview']);
+    $form['preview']['#file'] = $preview_file;
+    $form['preview']['#access'] = FALSE;
+  }
+
+  $desc_replace_upload = '<strong>' . t("WARNING: Replacing the image may cause its metadata to be replaced.") . '</strong>';
+  if (isset($form['replace_upload']['#description'])) {
+    $desc_replace_upload .= "<br/>" . $form['replace_upload']['#description'];
+  }
+  $form['replace_upload']['#description'] = $desc_replace_upload;
+
+  // Move the imagefield_focus form element.
+  if (isset($form['imagefield_focus']['focus_box'])) {
+    $form['imagefield_focus']['focus_box']['#weight'] = -1;
+  }
+  $form['field_file_image_title_text']['#weight'] = -9;
+  $form['filename']['#title'] = 'Display Title';
+
+  // Set a description, particular to Images.
+  if ($form['type']['#value'] == 'image') {
+    $form['filename']['#description'] = t('Displays image title as it appears on the site');
+  }
+
+  if (isset($form['options'])) {
+    // Hide new revision checkbox.
+    $form['options']['new_revision']['#access'] = FALSE;
+  }
+
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ *
+ * @see file_entity_add_upload()
+ */
+function pub_files_form_file_entity_add_upload_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['#step']) && $form['#step'] == 4) {
+    $file = $form['#entity'];
+    $file->key = 'media';
+
+    if (module_exists('imagefield_focus')) {
+      // Image focus settings.
+      $settings = variable_get('imagefield_focus_media_settings', array());
+      $settings = _imagefield_focus_build_js_settings('media', $settings);
+      $item = (array) $file;
+
+      $form['imagefield_focus'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Image Focus Settings'),
+        '#group' => 'additional_settings',
+        '#weight' => -10,
+      ) + imagefield_focus_crop_focus_form_fields($file->uri, $item);
+      _imagefield_focus_attach_files($settings, $form);
+    }
+
+    if (module_exists('focal_point')) {
+      $form['#group_children']['focal_point'] = 'group_image_left';
+      $form['focal_point']['#weight'] = -100;
+      $form['preview']['#access'] = FALSE;
+    }
+
+    // Meta tags.
+    $form['additional_settings'] = array(
+      '#type' => 'vertical_tabs',
+      '#weight' => 50,
+    );
+    $form['metatags']['#group'] = 'additional_settings';
+
+    // User information.
+    $form['user'] = array(
+      '#type' => 'fieldset',
+      '#access' => user_access('administer files'),
+      '#title' => t('User information'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#group' => 'additional_settings',
+      '#attributes' => array(
+        'class' => array('file-form-user'),
+      ),
+      '#attached' => array(
+        'js' => array(
+          drupal_get_path('module', 'file_entity') . '/file_entity.js',
+          array(
+            'type' => 'setting',
+            'data' => array('anonymous' => variable_get('anonymous', t('Anonymous'))),
+          ),
+        ),
+      ),
+      '#weight' => 90,
+    );
+    $form['user']['name'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Associated with'),
+      '#maxlength' => 60,
+      '#autocomplete_path' => 'user/autocomplete',
+      '#default_value' => !empty($file->uid) ? user_load($file->uid)->name : '',
+      '#weight' => -1,
+      '#description' => t('Leave blank for %anonymous.', array('%anonymous' => variable_get('anonymous', t('Anonymous')))),
+    );
+  }
+}

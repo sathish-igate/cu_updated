@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Display Suite feature.
+ */
+
+include_once 'pub_display_suite.features.inc';

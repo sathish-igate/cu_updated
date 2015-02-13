@@ -1,0 +1,555 @@
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the pub_tv module.
+ */
+
+/**
+ * Remove unused fields
+ */
+function pub_tv_update_7000() {
+  $deleted = array();
+  $data = array();
+
+  // Build the field structure.
+  $data['tv_show'] = array(
+    'field_show_id',
+    'field_nbc_universal_id',
+  );
+  $data['tv_season'] = array(
+    'field_nbc_universal_id',
+  );
+  $data['tv_episode'] = array(
+    'field_show_id',
+    'field_nbc_universal_id',
+  );
+  foreach ($data as $content_type => $fields) {
+    $instances = field_info_instances('node', $content_type);
+    foreach ($fields as $field) {
+      if (isset($instances[$field])) {
+        field_delete_instance($instances[$field]);
+        $deleted[] = $content_type . ':' . $field;
+      }
+    }
+  }
+
+  $ret = t('The following field instances were deleted: @fields', array('@fields' => join(', ', $deleted)));
+  $ret .= "\n";
+  drupal_set_message($ret);
+  return $ret;
+
+}
+
+/**
+ * Revert Feature on update.
+ */
+function pub_tv_update_7001() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_tv'));
+}
+
+/**
+ * Enable the pub_character_profile and pub_person content types if they aren't
+ * already enabled.
+ */
+function pub_tv_update_7002() {
+  $modules = array();
+  if (!module_exists('pub_character_profile')) {
+    $modules[] = 'pub_character_profile';
+  }
+  if (!module_exists('pub_person')) {
+    $modules[] = 'pub_person';
+  }
+  if (!empty($modules)) {
+    module_enable($modules);
+  }
+}
+
+/**
+ * Revert Feature on update so the Gigya sharebar field is added.
+ */
+function pub_tv_update_7003() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_tv'));
+}
+
+/**
+ * Migrate facebook and twitter fields to tv_external_links fields. This
+ * uses the Batch API and will automatically loop everything in the function
+ * as long as $sandbox['#finished'] is false.
+ */
+function pub_tv_update_7004(&$sandbox) {
+  // Revert feature.
+  if (!isset($sandbox['current_index'])) {
+    drupal_flush_all_caches();
+    // The "_profiles_all_features_revert" function no longer does anything. Sites
+    // should revert their features manually or as part of a deployment.
+    _profiles_all_features_revert(array('pub_tv'));
+  }
+
+  $t = get_t();
+
+  // Initialize.
+  if (!isset($sandbox['current_index']) && field_info_field('field_facebook') && field_info_field('field_twitter') && field_info_field('field_tv_external_links')) {
+    $sandbox['current_index'] = 0;
+    $query_result = db_query("(SELECT entity_id, field_facebook_value AS link FROM {field_data_field_facebook}) UNION (SELECT entity_id, field_twitter_value AS link FROM {field_data_field_twitter}) ORDER BY entity_id");
+    $total_rows = $query_result->rowCount();
+    $sandbox['total'] = $total_rows;
+  }
+
+  $nodes_per_batch = 5;
+
+  // Get data.
+  $batch_result = db_query_range("(SELECT entity_id, field_facebook_value AS link FROM {field_data_field_facebook}) UNION (SELECT entity_id, field_twitter_value AS link FROM {field_data_field_twitter}) ORDER BY entity_id", $sandbox['current_index'], $nodes_per_batch);
+
+  // Migrate data.
+  if ($batch_result && field_info_field('field_facebook') && field_info_field('field_twitter') && field_info_field('field_tv_external_links')) {
+    while ($row = $batch_result->fetchAssoc()) {
+      $node = node_load($row['entity_id']);
+
+      // Build the new link.
+      if (preg_match("/facebook/i", $row['link'])) {
+        $link['title'] = 'Facebook';
+      } elseif (preg_match("/twitter/i", $row['link'])) {
+          $link['title'] = 'Twitter';
+        }
+      $link['url'] = $row['link'];
+      // Set the new link.
+      $node->field_tv_external_links[LANGUAGE_NONE][] = $link;
+
+      node_save($node);
+      $sandbox['current_index'] ++;
+      drupal_set_message(t("Successfully migrated 1 URL field for node @nid.", array('@nid' => $row['entity_id'])));
+    }
+  }
+  // Check if batch needs to run again.
+  $sandbox['#finished'] = ($sandbox['current_index'] / $sandbox['total']);
+
+  // Batch is complete, time to finish.
+  if ($sandbox['#finished'] == 1) {
+
+    // Delete old data.
+    field_delete_field('field_facebook');
+    field_delete_field('field_twitter');
+    field_purge_batch(1000);
+
+    if (!field_info_field('field_facebook') && !field_info_field('field_twitter')) {
+      drupal_set_message($t('Old fields have been deleted.'));
+    }
+  }
+}
+
+/**
+ * Migrate Episode type settings to the new Episode type Vocabulary.
+ */
+function pub_tv_update_7005(&$sandbox) {
+  // Set up our default variables.
+  $t = get_t();
+  $count = 0;
+  $original_field_name = 'field_episode_type';
+  $vocabulary_name = 'tv_episode_type';
+  $field = field_info_field($original_field_name);
+  $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_name);
+  if (!empty($field['settings']['allowed_values'])) {
+    $allowed_values = $field['settings']['allowed_values'];
+    // By default Taxonomy terms do not have a key value system.
+    // So what we're going to do is cheat and save the key in the description.
+    foreach ($allowed_values as $key => $name) {
+      $term = new StdClass();
+      $term->name = $name;
+      $term->description = $key;
+      $term->vid = $vocabulary->vid;
+      $term->vocabulary_machine_name = $vocabulary->machine_name;
+      taxonomy_term_save($term);
+      $count++;
+    }
+    drupal_set_message(t("Successfully migrated @count Episode Type to the new Episode Type vocabulary.", array('@count' => $count)));
+  }
+  else {
+    // We finish here there is no data to be migrated.
+    drupal_set_message(t("No migration was necessary."));
+  }
+}
+
+/**
+ * Migrate Episode type value to the new Episode type Vocabulary.
+ */
+function pub_tv_update_7006(&$sandbox) {
+  // Set up our default variables.
+  $t = get_t();
+  $count = 0;
+  $original_field_name = 'field_episode_type';
+  $new_field_name = 'field_tv_episode_type';
+  $vocabulary_name = 'tv_episode_type';
+  $field = field_info_field($original_field_name);
+  $vocabulary = taxonomy_vocabulary_machine_name_load($vocabulary_name);
+  $field_check = field_has_data($field);
+
+  if ($field_check && !empty($field['settings']['allowed_values'])) {
+    $allowed_values = $field['settings']['allowed_values'];
+
+    // This is a multi-pass update. On the first call we need to initialize some
+    // variables.
+    if (!isset($sandbox['total'])) {
+      $sandbox['finished'] = FALSE;
+      $sandbox['processed'] = 0;
+
+      $query = new EntityFieldQuery();
+      $count = $query->fieldCondition($field)
+        ->count()
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+        ->execute();
+
+      $sandbox['total'] = $count;
+    }
+
+    if ($sandbox['processed'] < $sandbox['total']) {
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'tv_episode')
+        ->fieldCondition($field)
+        ->range($sandbox['processed'], $sandbox['processed'] + 10)
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT');
+
+      $result = $query->execute();
+      if (!empty($result['node'])) {
+        foreach ($result['node'] as $node) {
+          $sandbox['processed']++;
+          $node = node_load($node->nid);
+          $term = $node->field_episode_type[LANGUAGE_NONE][0]['value'];
+
+          $taxonomyQuery = new EntityFieldQuery();
+          $result = $taxonomyQuery->entityCondition('entity_type', 'taxonomy_term')
+            ->propertyCondition('vid', $vocabulary->vid)
+            ->propertyCondition('description', $term, 'CONTAINS')
+            ->execute();
+          $term = $result['taxonomy_term'];
+          $term = reset($term);
+          $node->field_tv_episode_type[LANGUAGE_NONE][0]['tid'] = $term->tid;
+          node_save($node);
+        }
+      }
+    }
+    else {
+      // Just wrap it up.
+      $sandbox['finished'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Delete Old TV Episode Field.
+ */
+function pub_tv_update_7007() {
+  $original_field_name = 'field_episode_type';
+  $instances = field_info_instance('node', $original_field_name, 'tv_episode');
+  if (!empty($instances)) {
+    // If this instance doesn't exist then we create it.
+    $instance = array(
+      'field_name' => $original_field_name,
+      'entity_type' => 'node',
+      'bundle' => 'tv_episode',
+      'label' => 'TV Shows',
+      'widget' => array(
+        'type' => 'field_collection_embed',
+      ),
+      'delete' => 0,
+    );
+
+    field_delete_instance($instance);
+  }
+}
+
+/**
+ * Enabled Publisher Relationships and Publisher Relationships TV.
+ */
+function pub_tv_update_7008() {
+  // Do not bother checking for module_exists since we always
+  // want them enabled now.
+  module_enable(array('pub_relationships', 'pub_relationships_tv'));
+}
+
+/**
+ * MAKE SURE YOU RUN A FEATURE REVERT BEFORE THIS UPDATE HOOK.
+ *
+ * Move TV Show from a field to a Pub relationship Field on the TV Season Content Type.
+ */
+function pub_tv_update_7009() {
+  // If our fields are missing we keep failing the update hook.
+  // I don't want to do a feature revert in here because it's a bad
+  // habit.
+
+  // Make new collection, Save, Take ID, Revisions,
+  // Take value and revision_id and use that on save.
+  // Set up our default variables.
+  $t = get_t();
+  $count = 0;
+  $original_field_name = 'field_show';
+  $original_field = field_info_field($original_field_name);
+  $new_field_name = 'field_pub_relation_tv_shows';
+  $new_field = field_info_field($new_field_name);
+  if (in_array('tv_season', $new_field['bundles']['node'])) {
+
+    if (!isset($sandbox['total'])) {
+      $sandbox['finished'] = FALSE;
+      $sandbox['processed'] = 0;
+
+      $query = new EntityFieldQuery();
+      $count = $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'tv_season')
+        ->fieldCondition($original_field_name, 'target_id', 'NULL', '!=')
+        ->count()
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+        ->execute();
+      $sandbox['total'] = $count;
+    }
+
+    if ($sandbox['processed'] < $sandbox['total']) {
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'tv_season')
+        ->fieldCondition($original_field_name, 'target_id', 'NULL', '!=')
+        ->range($sandbox['processed'], $sandbox['processed'] + 10)
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT');
+
+      $result = $query->execute();
+      if (!empty($result['node'])) {
+        foreach ($result['node'] as $node) {
+          $sandbox['processed']++;
+          $node = node_load($node->nid);
+          $target_id = $node->field_show[LANGUAGE_NONE][0]['target_id'];
+          if (isset($node->{$new_field_name}[LANGUAGE_NONE][0]['value'])) {
+            $entity = field_collection_item_load($node->{$new_field_name}[LANGUAGE_NONE][0]['value']);
+            $entity->field_show[LANGUAGE_NONE][0]['target_id'] = $target_id;
+            $entity->save();
+          }
+          else {
+            $entity = entity_create('field_collection_item', array('field_name' => $new_field_name));
+            $entity->field_show[LANGUAGE_NONE][0]['target_id'] = $target_id;
+            $entity->setHostEntity('node', $node);
+            $entity->save();
+          }
+        }
+      }
+    }
+    else {
+      // Just wrap it up.
+      $sandbox['finished'] = TRUE;
+    }
+  }
+  else {
+    // In case of an error, simply throw an exception with an error message.
+    throw new DrupalUpdateException('You must run a feature revert before running this update. Please make sure your pub_tv feature is reverted.');
+  }
+}
+
+/**
+ * MAKE SURE YOU RUN A FEATURE REVERT BEFORE THIS UPDATE HOOK.
+ *
+ * Move TV Season from a field to a Pub relationship Field on the TV Episode Content Type.
+ */
+function pub_tv_update_7010() {
+  // If our fields are missing we keep failing the update hook.
+  // I don't want to do a feature revert in here because it's a bad
+  // habit.
+
+  // Make new collection, Save, Take ID, Revisions,
+  // Take value and revision_id and use that on save.
+  // Set up our default variables.
+  $t = get_t();
+  $count = 0;
+  $original_field_name = 'field_show';
+  $original_field = field_info_field($original_field_name);
+  $new_field_name = 'field_pub_relation_tv_shows';
+  $new_field = field_info_field($new_field_name);
+  if (in_array('tv_episode', $new_field['bundles']['node'])) {
+
+    if (!isset($sandbox['total'])) {
+      $sandbox['finished'] = FALSE;
+      $sandbox['processed'] = 0;
+
+      $query = new EntityFieldQuery();
+      $count = $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'tv_episode')
+        ->fieldCondition($original_field_name, 'target_id', 'NULL', '!=')
+        ->count()
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT')
+        ->execute();
+      $sandbox['total'] = $count;
+    }
+
+    if ($sandbox['processed'] < $sandbox['total']) {
+      $query = new EntityFieldQuery();
+      $query->entityCondition('entity_type', 'node')
+        ->entityCondition('bundle', 'tv_episode')
+        ->fieldCondition($original_field_name, 'target_id', 'NULL', '!=')
+        ->range($sandbox['processed'], $sandbox['processed'] + 10)
+        ->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT');
+
+      $result = $query->execute();
+      if (!empty($result['node'])) {
+        foreach ($result['node'] as $node) {
+          $sandbox['processed']++;
+          $node = node_load($node->nid);
+          $field_show_target_id = $node->field_show[LANGUAGE_NONE][0]['target_id'];
+          $field_season_target_id = $node->field_season[LANGUAGE_NONE][0]['target_id'];
+          if (isset($node->{$new_field_name}[LANGUAGE_NONE][0]['value'])) {
+            $entity = field_collection_item_load($node->{$new_field_name}[LANGUAGE_NONE][0]['value']);
+            $entity->field_show[LANGUAGE_NONE][0]['target_id'] = $field_show_target_id;
+            $entity->field_season[LANGUAGE_NONE][0]['target_id'] = $field_season_target_id;
+            $entity->save();
+          }
+          else {
+            $entity = entity_create('field_collection_item', array('field_name' => $new_field_name));
+            $entity->field_show[LANGUAGE_NONE][0]['target_id'] = $field_show_target_id;
+            $entity->field_season[LANGUAGE_NONE][0]['target_id'] = $field_season_target_id;
+            $entity->setHostEntity('node', $node);
+            $entity->save();
+          }
+        }
+      }
+    }
+    else {
+      // Just wrap it up.
+      $sandbox['finished'] = TRUE;
+    }
+  }
+  else {
+    // In case of an error, simply throw an exception with an error message.
+    throw new DrupalUpdateException('You must run a feature revert before running this update. Please make sure your pub_tv feature is reverted.');
+  }
+}
+
+/**
+ * Remove Field Show and Field Season.
+ */
+function pub_tv_update_7011() {
+  $instance = array(
+    'field_name' => 'field_season',
+    'entity_type' => 'node',
+    'bundle' => 'tv_episode',
+  );
+  field_delete_instance($instance);
+
+  $instance = array(
+    'field_name' => 'field_show',
+    'entity_type' => 'node',
+    'bundle' => array('tv_episode', 'tv_season'),
+  );
+  field_delete_instance($instance);
+}
+
+/**
+ * Enable pub_relationships_tv_enhanced module.
+ */
+function pub_tv_update_7012() {
+  module_enable(array('pub_relationships_tv_enhanced'));
+}
+
+/**
+ * Create new Pub Relationship Field Instances.
+ */
+function pub_tv_update_7013() {
+  // Create a new field everywhere where there is a
+  // field_pub_relation_tv_shows field.
+  $new_field_name = 'field_tv_shows';
+  $old_field_name = 'field_pub_relation_tv_shows';
+  $tv_shows_field = field_info_field($new_field_name);
+  if (empty($tv_shows_field)) {
+    throw new DrupalUpdateException('A feature revert is needed for the new Relationship .');
+  }
+
+  $old_field = field_info_field($old_field_name);
+  if (empty($old_field)) {
+    // Well if they're both empty we have nothing to do here.
+    return;
+  }
+
+  foreach ($old_field['bundles'] as $entity => $bundles) {
+    foreach ($bundles as $bundle) {
+      // Create a new field instance everywhere there is an old field.
+      if ($entity === 'node' && ($bundle === 'tv_episode' || $bundle === 'tv_season')) {
+        // We skip our default fields. Feature handled those.
+        continue;
+      }
+
+      $instance = array(
+        'field_name' => $new_field_name,
+        'entity_type' => $entity,
+        'bundle' => $bundle,
+      );
+      field_create_instance($instance);
+
+      // Lets also set up the Field Group for this instance.
+      module_load_include('module', 'field_group');
+      $new = field_group_load_field_group('group_relationships', 'node', 'tv_episode', 'form');
+      $new->id = NULL;
+      $new->entity_type = $entity;
+      $new->bundle = $bundle;
+      $new->identifier = $new->group_name . '|' . $new->entity_type . '|' . $new->bundle . '|' . $new->mode;
+      ctools_export_crud_save('field_group', $new);
+    }
+  }
+}
+
+
+/**
+ * Migrate data from old Pub Relation TV Shows to new TV Shows field.
+ */
+function pub_tv_update_7014(&$sandbox) {
+  // We're going to do direct SQL, mainly because there's no index keys
+  // and well it's a LOT of data to move. SQL does it pretty fast ;-)
+
+  // Are you Ready? FYI: You're not.
+
+  $field_data_query = "SELECT relationships.entity_type, relationships.bundle, relationships.deleted, relationships.entity_id,
+    relationships.revision_id,relationships.language, relationships.delta,
+    show_field.field_show_target_id as field_tv_shows_show, /* Show Value */
+    COALESCE(season_field.field_season_target_id, 0) as field_tv_shows_season, /* Season Value */
+    COALESCE(episode_field.field_episode_target_id, 0) as field_tv_shows_episode /* Episode Value */
+    from field_collection_item as field_collection
+
+    /* Show Field */
+    JOIN field_data_field_show as show_field on show_field.entity_id = field_collection.item_id
+
+    /* Season Field */
+    LEFT JOIN field_data_field_season as season_field on season_field.entity_id = field_collection.item_id
+
+    /* Season Field */
+    LEFT JOIN field_data_field_episode as episode_field on episode_field.entity_id = field_collection.item_id
+
+    JOIN field_data_field_pub_relation_tv_shows as relationships on relationships.field_pub_relation_tv_shows_value = show_field.entity_id
+
+    WHERE field_collection.field_name = 'field_pub_relation_tv_shows' AND show_field.entity_type = 'field_collection_item'";
+
+  // Save Field Data.
+  db_query('INSERT into {field_data_field_tv_shows} ' . $field_data_query);
+
+  $field_revision_query = "SELECT relationships.entity_type, relationships.bundle, relationships.deleted, relationships.entity_id,
+    relationships.revision_id,relationships.language, relationships.delta,
+    show_field.field_show_target_id as field_tv_shows_show, /* Show Value */
+    COALESCE(season_field.field_season_target_id, 0) as field_tv_shows_season, /* Season Value */
+    COALESCE(episode_field.field_episode_target_id, 0) as field_tv_shows_episode /* Episode Value */
+
+    FROM field_collection_item_revision as field_collection_revision
+    JOIN field_collection_item as field_collection ON field_collection.revision_id = field_collection_revision.revision_id
+
+    /* Show Field */
+    JOIN field_revision_field_show as show_field on show_field.revision_id = field_collection_revision.revision_id
+
+    /* Season Field */
+    LEFT JOIN field_revision_field_season as season_field on season_field.revision_id = field_collection_revision.revision_id
+
+    /* Season Field */
+    LEFT JOIN field_revision_field_episode as episode_field on episode_field.revision_id = field_collection_revision.revision_id
+
+    JOIN field_revision_field_pub_relation_tv_shows as relationships on relationships.field_pub_relation_tv_shows_revision_id = field_collection_revision.revision_id
+
+    WHERE field_collection.field_name = 'field_pub_relation_tv_shows' AND show_field.entity_type = 'field_collection_item'";
+
+  // Save Field Revision Data.
+  db_query('INSERT into {field_revision_field_tv_shows} ' . $field_revision_query);
+}

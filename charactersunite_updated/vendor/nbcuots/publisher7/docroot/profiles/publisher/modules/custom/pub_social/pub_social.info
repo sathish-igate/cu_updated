@@ -1,0 +1,13 @@
+name = Pub Social
+description = Social sharing for Twitter & Facebook.
+package = Publisher
+core = "7.x"
+version = "7.x-1.x"
+stylesheets[all][] = pub_social.css
+dependencies[] = ctools
+dependencies[] = fb_app
+dependencies[] = fb_stream
+dependencies[] = soft_length_limit
+dependencies[] = state_flow
+dependencies[] = twitter_post
+files[] = views/handlers/pub_social_views_handler_node_revision_share_link.inc

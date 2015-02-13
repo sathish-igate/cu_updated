@@ -1,0 +1,7 @@
+name = Publisher Entertainment
+core = 7.x
+package = Publisher Feature Sets
+dependencies[] = pub_media
+dependencies[] = simple_exif
+dependencies[] = pub_mpx
+dependencies[] = pub_relationships_tv_enhanced

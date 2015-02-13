@@ -1,0 +1,7 @@
+name = Publisher QA Releases Utility
+description = Allows users to build a release of Publisher Core and push it to a specific QA environment.
+core = 7.x
+package = Publisher
+version = 7.x-1.0
+
+dependencies[] = pub_utilities

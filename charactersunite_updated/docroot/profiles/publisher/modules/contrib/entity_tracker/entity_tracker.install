@@ -1,0 +1,84 @@
+<?php
+/**
+ * @file
+ *  Install file for Entity Tracker.
+ */
+
+ /**
+  * Implements hook_install().
+  */
+ function entity_tracker_install() {
+   $roles = array();
+   $user_filters = user_filters();
+
+   if (isset($user_filters['role']['options'])) {
+     // Turn on tracking for all roles by default.
+     $roles = $user_filters['role']['options'];
+     unset($roles['[any]']);
+   }
+
+   variable_set('entity_tracker_roles', array_keys($roles));
+ }
+
+ /**
+  * Implements hook_uninstall().
+  */
+ function entity_tracker_uninstall() {
+   variable_del('entity_tracker_roles');
+ }
+
+/**
+ * Implements hook_schema().
+ */
+function entity_tracker_schema() {
+  $schema['entity_tracker'] = array(
+    'description' => 'Stores an action taken on an entity.',
+    'fields' => array(
+      'entity_tracker_id' => array(
+        'description' => 'The primary identifier for this entry.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'The primary identifier for an entity.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'vid' => array(
+        'description' => 'The current {node_revision}.vid version identifier.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid took action on this entity.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'title' => array(
+        'description' => 'The type of action taken on an entity--e.g. created or deleted',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'action' => array(
+        'description' => 'The type of action taken on an entity--e.g. created or deleted',
+        'type' => 'varchar',
+        'length' => 255,
+      ),
+      'timestamp' => array(
+        'description' => 'The time the action took place.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('entity_tracker_id'),
+  );
+
+  return $schema;
+}

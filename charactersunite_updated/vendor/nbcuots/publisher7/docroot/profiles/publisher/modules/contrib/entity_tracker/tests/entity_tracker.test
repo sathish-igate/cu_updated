@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Entity Tracker module.
+ */
+
+/**
+ * Defines a class for Entity Tracker tests.
+ */
+class NodeTrackerTestCase extends DrupalWebTestCase {
+  protected $admin_user;
+
+  /**
+   * Enable State Machine modules for testing.
+   */
+  public function setUp() {
+    parent::setUp();
+
+    $this->admin_user = $this->drupalCreateUser(array(
+      'administer content types',
+      'administer content',
+      'view entity tracker',
+    ));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Entity Tracker test cases',
+      'description' => 'Tests the saving of Entity Tracker data on modification of a node.',
+      'group' => 'Entity Tracker',
+    );
+  }
+
+  protected function createNode() {
+    $node = array();
+    $node['type'] = 'article';
+    $node['title'] = $this->randomName(12);
+    $node['uid'] = 1;
+    $node['language'] = LANGUAGE_NONE;
+    $node['status'] = 1;
+
+    return $this->drupalCreateNode($node);
+  }
+
+  public function testNodeTrackerDataSaved() {
+    module_enable(array('entity_tracker'));
+    $this->assertTrue(module_exists('entity_tracker'), 'Entity Tracker module enabled.');
+
+    $node = $this->createNode();
+
+    /**
+     * @todo
+     */
+  }
+}

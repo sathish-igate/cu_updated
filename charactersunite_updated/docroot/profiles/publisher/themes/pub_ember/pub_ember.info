@@ -1,0 +1,8 @@
+name = Publisher Ember
+description = A Publisher sub theme for Ember.
+package = Publisher
+core = 7.x
+base theme  = ember
+
+; Stylesheets
+stylesheets[screen][] = styles/overwrite.css

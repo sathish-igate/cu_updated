@@ -1,0 +1,388 @@
+<?php
+
+/**
+ * @file
+ * Module file for state_flow_schedule.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function state_flow_schedule_permission() {
+  return array(
+    'schedule content workflow' => array(
+      'title' => t('Schedule content workflow.'),
+      'description' => t('Schedule content to be published.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for state_flow_entity_events_revision().
+ */
+function state_flow_schedule_form_state_flow_entity_events_revision_alter(&$form, &$form_state, $form_id) {
+  state_flow_schedule_form_state_flow_events_revision_alter($form, $form_state, $form_id);
+
+  // Re-arrange buttons.
+  $form['submit']['#weight'] = 3;
+  $form['cancel']['#weight'] = 4;
+
+  // Inject our own submit handler before the others to ensure the scheduling is
+  // written before hook_state_flow_event() / hook_field_attach_presave() are
+  // invoked.
+  array_unshift($form['#submit'], 'state_flow_schedule_form_submit');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for node_form().
+ */
+function state_flow_schedule_form_node_form_alter(&$form, &$form_state, $form_id) {
+  // Extend the event form if possible.
+  $node = $form_state['node'];
+  $machine = state_flow_entity_load_state_machine($node, 'node');
+
+  // Only alter the form if this entity has a state machine and is not ignored.
+  if (!empty($machine) && !$machine->ignore()) {
+    state_flow_schedule_form_state_flow_events_revision_alter($form['options']['state_flow'], $form_state, $form_id);
+    // Inject our own submit handler before the others to ensure the scheduling
+    // is written before hook_state_flow_event() / hook_field_attach_presave()
+    // are invoked.
+    array_unshift($form['#submit'], 'state_flow_schedule_form_submit');
+  }
+}
+
+/**
+ * Returns the list of schedulable events.
+ *
+ * Invokes hook_state_flow_schedule_schedulable_events_alter().
+ * Uses static caching.
+ *
+ * @return array
+ *   Associative array with the schedulable event as key and the event that is
+ *   scheduled / triggered as value.
+ */
+function state_flow_schedule_schedulable_events() {
+  $schedulable_events = &drupal_static(__FUNCTION__, array());
+  if (empty($schedulable_events)) {
+    $schedulable_events = array(
+      'schedule' => 'publish',
+    );
+    // Allow other modules to determine events that can be scheduled.
+    drupal_alter('state_flow_schedule_schedulable_events', $schedulable_events);
+  }
+  return $schedulable_events;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function state_flow_schedule_form_state_flow_events_revision_alter(&$form, &$form_state, $form_id) {
+  $schedulable_events = state_flow_schedule_schedulable_events();
+
+  $current_entity = $form['entity_revision']['#value'];
+  $entity_info = entity_get_info($form['entity_type']['#value']);
+  $entity_type = $form['entity_type']['#value'];
+  $entity_id = $current_entity->{$entity_info['entity keys']['id']};
+  $revision_id = $current_entity->{$entity_info['entity keys']['revision']};
+
+  $results = state_flow_schedule_get_scheduled_entities($entity_type, $entity_id, $revision_id);
+  $default_schedule_time = time();
+  if (!empty($results)) {
+    $result = reset($results);
+    $default_schedule_time = $result->date;
+    // Adjust the predefined state if possible.
+    if (isset($form['event']['#options'][$result->source_event])) {
+      $form['event']['#default_value'] = $result->source_event;
+    }
+  }
+
+  // Build very specific css class in case this is handled on a page with
+  // multiple forms.
+  $class = drupal_html_class('sfs-date-' . $entity_type . '-' . $entity_id . '-' . $revision_id);
+  $form['state_flow_schedule'] = array(
+    '#type' => 'container',
+    '#tree' => TRUE,
+    '#attributes' => array('class' => array($class), ''),
+  );
+  // Show only if a schedulable event is selected.
+  foreach ($schedulable_events as $schedulable_event => $target_event) {
+    $form['state_flow_schedule']['#states']['visible']['form:has(.' . $class . ') :input[name="event"]'][] = array('value' => $schedulable_event);
+  }
+
+  $form['state_flow_schedule']['date'] = array(
+    '#type' => 'date_popup',
+    '#title' => 'Select a date and time',
+    '#date_year_range' => '-0:+3',
+    '#default_value' => date(DATE_FORMAT_DATETIME, $default_schedule_time),
+    '#date_label_position' => 'within',
+    '#date_format' => 'm/d/Y h:i a',
+    '#weight' => 2,
+    '#element_validate' => array('state_flow_scheduled_content_validate'),
+  );
+  $form['state_flow_schedule']['entity_type'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $entity_type,
+  );
+  $form['state_flow_schedule']['entity_id'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $entity_id,
+  );
+  $form['state_flow_schedule']['revision_id'] = array(
+    '#type' => 'hidden',
+    '#default_value' => $revision_id,
+  );
+}
+
+/**
+ * Helper to determine user_access by event and permission.
+ *
+ * @param string $event
+ *   The event to check.
+ * @param string $permission
+ *   The permission to check.
+ *
+ * @return bool
+ *   TRUE if the user has access.
+ */
+function state_flow_schedule_guard_permission($event, $permission) {
+  // If the user has the global permission, then return TRUE.
+  if (user_access($permission)) {
+    return TRUE;
+  }
+  // Otherwise, return FALSE.
+  return FALSE;
+}
+
+/**
+ * Validate callback when scheduling content to be published.
+ */
+function state_flow_scheduled_content_validate(&$element, &$form_state, &$form) {
+  $schedulable_events = state_flow_schedule_schedulable_events();
+  // Validate date if a schedulable event is set.
+  if (isset($schedulable_events[$form_state['values']['event']])) {
+    $selected_date = implode(' ', $form_state['values']['state_flow_schedule']['date']);
+    $current_time = time();
+    if (strtotime($selected_date) <= $current_time) {
+      form_set_error('state_flow_schedule][date', 'You must select a date in the future.');
+    }
+  }
+}
+
+/**
+ * Submit callback when scheduling content to be published.
+ *
+ * @see state_flow_schedule_field_attach_presave()
+ */
+function state_flow_schedule_form_submit($form, &$form_state) {
+  $event_name = $form_state['values']['event'];
+  $schedulable_events = state_flow_schedule_schedulable_events();
+  if (!empty($form_state['values']['state_flow_schedule']) && !empty($schedulable_events[$event_name])) {
+    $values = $form_state['values']['state_flow_schedule'];
+    $selected_date = strtotime($values['date']);
+    $entity_type = $values['entity_type'];
+    $entity_id = $values['entity_id'];
+    $revision_id = $values['revision_id'];
+    // Schedule the event here - the event history is extended later via
+    // hook_state_flow_event().
+    state_flow_schedule_schedule($entity_type, $entity_id, $revision_id, $selected_date, $schedulable_events[$event_name], $event_name);
+  }
+}
+
+/**
+ * Implements hook_field_attach_presave().
+ *
+ * @see state_flow_schedule_form_submit()
+ */
+function state_flow_schedule_field_attach_presave($entity_type, $entity) {
+  if ($entity_type == 'state_flow_history_entity') {
+    // If this is a scheduled event adjust the log message.
+    $schedulable_events = state_flow_schedule_schedulable_events();
+    if (!empty($schedulable_events[$entity->event])) {
+      $schedules = state_flow_schedule_get_scheduled_entities($entity->entity_type, $entity->entity_id, $entity->revision_id);
+      if (!empty($schedules)) {
+        $schedule = reset($schedules);
+        // Add scheduling message.
+        $entity->log .= "\n" . t('This entity has been scheduled to !event on !date', array(
+            '!event' => $schedule->target_event,
+            '!date' => date(DATE_FORMAT_DATETIME, $schedule->date),
+          ));
+      }
+    }
+  }
+}
+
+/**
+ * Add entity to be published to schedule table.
+ *
+ * @param string $entity_type
+ *   The entity type.
+ * @param int $entity_id
+ *   The entity id.
+ * @param int $revision_id
+ *   The revision id.
+ * @param int $selected_date
+ *   The unix timestamp.
+ * @param string $event
+ *   The event to fire.
+ * @param string $source_event
+ *   The event that scheduled the target event.
+ *
+ * @return int|FALSE
+ *   If the record insert or update failed, returns FALSE. If it succeeded,
+ *   returns SAVED_NEW or SAVED_UPDATED, depending on the operation performed.
+ */
+function state_flow_schedule_schedule($entity_type, $entity_id, $revision_id, $selected_date, $event = 'publish', $source_event = 'schedule') {
+  $result = state_flow_schedule_get_scheduled_entities($entity_type, $entity_id, $revision_id);
+
+  $data = new stdClass();
+  $data->entity_type = $entity_type;
+  $data->entity_id = $entity_id;
+  $data->revision_id = $revision_id;
+  $data->date = $selected_date;
+  $data->target_event = $event;
+  $data->source_event = $source_event;
+
+  // Update.
+  if (!empty($result)) {
+    $result = reset($result);
+    $data->sid = $result->sid;
+    return drupal_write_record('state_flow_schedule', $data, array('sid'));
+  }
+  // Insert.
+  return drupal_write_record('state_flow_schedule', $data);
+}
+
+/**
+ * Implements hook_cron().
+ */
+function state_flow_schedule_cron() {
+  $results = state_flow_schedule_get_scheduled_entities(NULL, NULL, NULL, time());
+  $queue = DrupalQueue::get('state_flow_schedule');
+  foreach ($results as $result) {
+    $queue->createItem($result);
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function state_flow_schedule_cron_queue_info() {
+  $queues['state_flow_schedule'] = array(
+    'worker callback' => 'state_flow_schedule_process_item',
+    'time' => 60,
+  );
+  return $queues;
+}
+
+/**
+ * Process queued item to fire publish event.
+ *
+ * @param object $data
+ *   The item to process.
+ */
+function state_flow_schedule_process_item($data) {
+  global $user;
+  state_flow_schedule_process_scheduled_item($data->sid, 'Executed ' . $data->target_event . ' on cron.');
+}
+
+/**
+ * Process scheduled entities to fire publish event.
+ *
+ * @param int $sid
+ *   The id of the schedule item to process.
+ * @param string $log
+ *   Additional log message.
+ *
+ * @return bool
+ *   TRUE on success.
+ */
+function state_flow_schedule_process_scheduled_item($sid, $log = NULL) {
+  global $user;
+  $user = user_load(1);
+
+  $data = db_select('state_flow_schedule')
+    ->fields('state_flow_schedule')
+    ->condition('sid', $sid)
+    ->orderBy('date')
+    ->execute()
+    ->fetchObject();
+
+  if (empty($log)) {
+    $log = 'Executed scheduled event ' . $data->target_event . '. sid: ' . $data->sid;
+  }
+
+  $entity = entity_revision_load($data->entity_type, $data->revision_id);
+  drupal_set_message('Firing event: ' . $data->target_event . ' entity_type:' . $data->entity_type . ', entity_id:' . $data->entity_id . ', revision_id:' . $data->revision_id);
+  $state_flow = state_flow_entity_load_state_machine($entity, $data->entity_type, TRUE);
+
+  // Fire event and check if it was successful.
+  if ($state_flow->fire_event($data->target_event, $user->uid, $log) === FALSE) {
+    drupal_set_message('Unable to ' . $data->target_event . ' entity.', 'error');
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Return all entities scheduled to be published.
+ *
+ * @param string $entity_type
+ *   The entity type.
+ * @param int $entity_id
+ *   The entity id.
+ * @param int $revision_id
+ *   The revision id.
+ * @param int $date
+ *   The timestamp.
+ *
+ * @return array
+ *   Array of scheduled entities.
+ */
+function state_flow_schedule_get_scheduled_entities($entity_type = NULL, $entity_id = NULL, $revision_id = NULL, $date = NULL) {
+  if (isset($entity_type) && isset($entity_id) && isset($revision_id)) {
+    $result = db_query('
+      SELECT *
+      FROM state_flow_schedule
+      WHERE entity_type = :entity_type
+      AND entity_id = :entity_id
+      AND revision_id = :revision_id',
+      array(
+        ':entity_type' => $entity_type,
+        ':entity_id' => $entity_id,
+        ':revision_id' => $revision_id,
+      )
+    )->fetchAll();
+  }
+  elseif (isset($date)) {
+    $result = db_query('
+      SELECT *
+      FROM state_flow_schedule
+      WHERE date <= :date',
+      array(
+        ':date' => $date,
+      )
+    )->fetchAll();
+  }
+  else {
+    $result = db_query('
+      SELECT *
+      FROM state_flow_schedule'
+    )->fetchAll();
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_sps_override_plugins().
+ *
+ * Provide some basic overrides for workflow modules.
+ */
+function state_flow_schedule_sps_override_plugins() {
+  return array(
+    'state_flow_schedule_override' => array(
+      'class' => 'Drupal\state_flow_schedule\StateFlowScheduleOverride',
+      'condition' => 'date_condition',
+    ),
+  );
+}

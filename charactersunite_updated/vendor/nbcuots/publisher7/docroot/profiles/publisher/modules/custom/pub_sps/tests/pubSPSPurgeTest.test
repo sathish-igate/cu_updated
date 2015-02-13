@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ * Publisher smoke test for the default installation profile.
+ */
+
+/**
+ * Simple.
+ */
+class PubSPSPurgeTestCase extends PublisherWebTestCase {
+
+  /**
+   * Normal static getInfo() method.
+   *
+   * @return array
+   *   Test Information.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Test Varnish and Akamai purging.',
+      'description' => 'Ensure Varnish and Akamai are purged following changes to nodes.',
+      'group' => 'Publisher',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('aquia_purge', 'akamai'));
+  }
+
+  /**
+   * Create a node, check that its detail page can be retrieved.  Then change
+   * the node's state to unpublished, and check that the detail page has
+   * become unavailable.
+   */
+  public function testCachePurge() {
+    // Set the time we wait for Varnish and Akamai caches to purge.
+    $purge_wait = 120;
+    // Create a media_gallery node.
+    $node = $this->drupalCreateNode(array('type' => 'media_gallery'));
+    // Give the cache purge some time to do its thing.
+    sleep($purge_wait);
+    // Request the node's detail page.
+    $this->drupalGet(trim(url('node/' . $node->nid), '/'));
+    // If the node's title is present on the page, it's being served by Varnish.
+    $this->assertText($node->title, 'Node title is present on node detail page.');
+    // Now unpublish the node.
+    $settings = get_object_vars($node);
+    $settings['revision'] = 2;
+    $settings['status'] = 0;
+    $this->drupalCreateNode($settings);
+    $node = node_load($node->nid); 
+    // Give the cache purge some time to do its thing.
+    sleep($purge_wait);
+    // Request the node's detail page.
+    $this->drupalGet(trim(url('node/' . $node->nid), '/'));
+    // If the node's title is present on the page, the newly unpublished node's
+    // detail page has been cleared in Varnish.
+    $this->assertNoText($node->title, 'Node title is *not* present on node detail page.');
+  }
+}

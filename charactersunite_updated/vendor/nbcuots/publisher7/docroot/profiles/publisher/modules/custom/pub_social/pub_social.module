@@ -1,0 +1,349 @@
+<?php
+
+/**
+ * @file
+ * Functions for social sharing.
+ */
+
+/**
+ * Implements hook_views_api().
+ */
+function pub_social_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'pub_social') . '/views',
+  );
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * Build the ctools modal link. We autoload the node here for use later.
+ *
+ * @see pub_social_modal_page()
+ * @see pub_social_facebook_post_admin_settings()
+ */
+function pub_social_menu() {
+  $items['node/%node/share/%ctools_js'] = array(
+    'title' => 'Share to Social Apps',
+    'page arguments' => array(1, 3),
+    'page callback' => 'pub_social_modal_page',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'ajax_deliver'
+  );
+
+  $items['admin/config/services/facebook'] = array(
+    'title' => 'Facebook',
+    'description' => 'Configuration page for selecting which types of content are allowed to be shared with Facebook',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_social_facebook_post_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'weight' => 3,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function pub_social_admin_paths() {
+  $paths = array(
+    'node/*/share' => TRUE,
+    'node/*/share/*' => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Menu callback for node/%node/share/%ctools_js.
+ *
+ * Constructs a modal page to wrap the form in.
+ *
+ * @param object $node
+ *   The node object that was passed as an argument from the hook_menu()
+ *   path.
+ * @param bool $js
+ *   Ctools determination whether the user's browser is javascript
+ *   enabled.
+ *
+ * @return array
+ */
+function pub_social_modal_page($node, $js) {
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $form_state = array(
+    'title' => t("Share %node_title to Social Apps", array('%node_title' => $node->title)),
+    'ajax' => $js,
+    '#node' => $node,
+  );
+
+  if ($js) {
+    $commands = ctools_modal_form_wrapper('pub_social_share_form', $form_state);
+
+    return array(
+      '#type' => 'ajax',
+      '#commands' => $commands,
+    );
+  }
+}
+
+/**
+ * Form constructor for the pub social share form.
+ *
+ * @ingroup forms
+ * @see pub_social_share_form_validate()
+ * @see pub_social_share_form_submit()
+ */
+function pub_social_share_form($form, &$form_state) {
+  module_load_include('inc', 'twitter', 'twitter');
+  module_load_include('module','twitter_post');
+  $twitter_is_shareable = array_flip(variable_get('twitter_post_types', array()));
+  $node_type = $form_state['#node']->type;
+  $published = $form_state['#node']->current_state;
+  $form['#attributes']['class'][] = 'pub-social-share-form';
+
+  // Vertical tab area.
+  $form['social_sharing_vertical_tab'] = array(
+    '#type' => 'vertical_tabs',
+  );
+
+  if ($published === 'published' && (isset($twitter_is_shareable[$node_type]) && twitter_load_authenticated_accounts())) {
+    // Twitter fieldset (vertical tab).
+    $form['twitter'] = array(
+      '#title' => t('Twitter'),
+      '#type' => 'fieldset',
+      '#group' => 'social_sharing_vertical_tab',
+      '#tree' => TRUE,
+      '#attributes' => array(
+        'id' => 'twitter',
+      ),
+    );
+
+    // Checkbox to toggle posting to Twitter.
+    $form['twitter']['enabled'] = array(
+      '#title' => t('Post to Twitter'),
+      '#type' => 'checkbox',
+      '#default_value' => variable_get('twitter_post_default_value', 0),
+    );
+
+    $form['twitter']['twitter_status_container'] = array(
+      '#type' => 'container',
+      '#parents' => array('twitter'),
+      '#states' => array(
+        'invisible' => array(
+          // If the checkbox is not enabled, hide the container.
+          'input[name="twitter[enabled]"]' => array('checked' => FALSE),
+        ),
+      ),
+    );
+
+    // Build the 'Tweet' textarea.
+    $status = array(
+      '#title' => t('Tweet'),
+      '#type' => 'textarea',
+      '#description' => t('The given text will be posted to twitter.com. You can use !url, !url-alias, !tinyurl, !title and !user as replacement text.'),
+      '#resizable' => FALSE,
+      '#ajax' => TRUE,
+      '#rows' => 2,
+      '#attributes' => array(
+        'class' => array('soft-length-limit'),
+        'data-soft-length-limit' => 140,
+        'data-soft-length-minimum' => 10,
+        'data-soft-length-style-select' => 1,
+      ),
+      '#attached' => array(
+        'js' => array(
+          drupal_get_path('module', 'soft_length_limit') . '/jquery.textchange.min.js',
+          drupal_get_path('module', 'soft_length_limit') . '/soft_length_limit.js',
+          drupal_get_path('module', 'pub_social') . '/pub_social.js'
+        ),
+        'css' => array(drupal_get_path('module', 'soft_length_limit') . '/soft_length_limit.css'),
+      )
+    );
+
+    // Do not name the last array key 'status' or twitter_post.js will
+    // 'display: none;' it which is bad.
+    $form['twitter']['twitter_status_container']['status_update'] = $status;
+
+    // Grab the Twitter account element for use later in submit handler. This also
+    // builds the account form if there are more than one Twitter accounts.
+    $twitter_post_form = twitter_post_form();
+    $form['twitter']['twitter_status_container']['account'] = $twitter_post_form['account'];
+  }
+
+  $facebook_is_shareable = array_flip(variable_get('facebook_post_types', array()));
+  if ($published === 'published' && isset($facebook_is_shareable[$node_type])) {
+    // Facebook fieldset (vertical tab).
+    $form['facebook'] = array(
+      '#title' => t('Facebook'),
+      '#type' => 'fieldset',
+      '#group' => 'social_sharing_vertical_tab',
+      '#tree' => TRUE,
+      '#attributes' => array(
+        'id' => 'facebook',
+      ),
+    );
+
+    // Checkbox to toggle posting to Facebook.
+    $form['facebook']['enabled'] = array(
+      '#title' => t('Post to Facebook Wall'),
+      '#type' => 'checkbox',
+    );
+
+    $form['facebook']['facebook_container'] = array(
+      '#type' => 'container',
+      '#parents' => array('facebook'),
+      '#states' => array(
+        'invisible' => array(
+          // If the checkbox is not enabled, hide the container.
+          'input[name="facebook[enabled]"]' => array('checked' => FALSE),
+        ),
+      ),
+    );
+
+    $stream_post = array(
+      '#title' => t('Provide a brief message (OPTIONAL)'),
+      '#type' => 'textarea',
+      '#resizable' => FALSE,
+      '#ajax' => TRUE,
+      '#rows' => 6,
+      '#attached' => array(
+        'js' => array(
+          drupal_get_path('module', 'pub_social') . '/pub_social.js'
+        ),
+      )
+    );
+
+    $form['facebook']['facebook_container']['stream_post'] = $stream_post;
+  }
+
+  // @todo Find out how Drupal does the wrapper div#edit-actions around the
+  // submit area.
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#id' => 'edit-actions',
+  );
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Share'),
+  );
+
+  $form['actions']['cancel'] = array(
+    '#markup' => l(t('Cancel'), '#',
+      array(
+        'attributes' => array(
+          'class' => 'ctools-close-modal'
+        ),
+        'external' => TRUE
+      )
+    )
+  );
+
+  return $form;
+}
+
+/**
+ * Form submission handler for the pub_social_share_form().
+ *
+ * Send values to the selected social networks.
+ *
+ * @see pub_social_share_form_validate()
+ */
+function pub_social_share_form_submit($form, &$form_state) {
+  ctools_include('ajax');
+  $commands = array();
+
+  // Post to Twitter.
+  if (isset($form_state['values']['twitter']['enabled'])) {
+    $node = $form_state['#node'];
+    $node->twitter['post'] = $form_state['values']['twitter']['enabled'];
+    $node->twitter['account'] = $form_state['values']['twitter']['account'];
+    $node->twitter['status'] = $form_state['values']['twitter']['status_update'];
+
+    module_invoke('twitter_post', 'node_insert', $node);
+  }
+
+  // Post to Facebook.
+  if (isset($form_state['values']['facebook']['enabled'])) {
+    $node = $form_state['#node'];
+    $node->fb_stream_do_post = $form_state['values']['facebook']['enabled'];
+    $node->fb_stream_from_token = variable_get('fb_stream_token');
+    $node->fb_stream_message = $form_state['values']['facebook']['stream_post'];
+
+    // Since this is not a node insert or update, we can skip the shutdown registration,
+    // and directly invoke fb_stream_post_on_shutdown().
+    fb_stream_post_on_shutdown($node);
+  }
+
+  $commands[] = ctools_modal_command_dismiss();
+  $commands[] = ajax_command_html('#console', theme('status_messages'));
+
+
+  print ajax_render($commands);
+  exit;
+}
+
+/**
+ * Form validation handler for the pub_social_share_form().
+ *
+ * @see pub_social_share_form_submit()
+ */
+function pub_social_share_form_validate($form, &$form_state) {
+  if ($form_state['values']['twitter']['enabled'] && empty($form_state['values']['twitter']['status_update'])) {
+    form_set_error('twitter', t('Nothing to post to Twitter. Fill in a Tweet or uncheck the "Post to Twitter" checkbox.'));
+  }
+
+  if (!$form_state['values']['twitter']['enabled'] && !$form_state['values']['facebook']['enabled']) {
+    form_set_error('nothing', 'You didn\'t submit anything, do stuff or press cancel to exit.');
+  }
+
+  // If Tweeting, parse tokens and make sure we are under 140 characters.
+  if ($form_state['values']['twitter']['enabled'] && !empty($form_state['values']['twitter']['status_update'])) {
+    $replacements = array(
+      '!title' => $form_state['#node']->title,
+      '!url' => url('node/' . $form_state['#node']->nid, array('absolute' => TRUE, 'alias' => TRUE)),
+      '!url-alias' => url('node/' . $form_state['#node']->nid, array('absolute' => TRUE)),
+      '!user' => $form_state['#node']->name,
+    );
+
+    // Only generate the shortened URL if it's going to be used. No sense
+    // burning through TinyURLs without a good reason.
+    if (strstr($form_state['values']['twitter']['status_update'], '!tinyurl') !== FALSE) {
+      $replacements['!tinyurl'] = twitter_shorten_url(url('node/' . $node->nid, array('absolute' => TRUE)));
+    }
+
+    $status = strtr($form_state['values']['twitter']['status_update'], $replacements);
+
+    if (strlen($status) > 140) {
+      form_set_error('twitter', strlen($status) . t(' characters is too long for a Tweet. Shorten then try again.<br>') . $status);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ *
+ * Remove the "Post to twitter.com" vertical tab when the checkbox is checked at
+ * admin/config/services/twitter/post
+ */
+function pub_social_form_node_form_alter(&$form, &$form_state, $form_id) {
+  $form['twitter']['#access'] = FALSE;
+}
+
+/**
+ * Menu page callback for admin/config/services/facebook.
+ */
+function pub_social_facebook_post_admin_settings($form, &$form_state) {
+  $form['facebook_post_types'] = array(
+    '#title' => t('Node types'),
+    '#type' => 'checkboxes',
+    '#description' => t('Choose which node types should support posting to Facebook.'),
+    '#options' => node_type_get_names(),
+    '#default_value' => variable_get('facebook_post_types', array()),
+  );
+
+  return system_settings_form($form);
+}

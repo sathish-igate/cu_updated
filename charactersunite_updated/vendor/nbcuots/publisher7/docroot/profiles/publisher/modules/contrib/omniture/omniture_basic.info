@@ -1,0 +1,7 @@
+name = Omniture basic variables
+description = Adds basic variables (taxonomy terms, page title, user name) to Omniture SiteCatalyst.
+core = 7.x
+files[] = omniture_basic.module
+files[] = omniture_basic.install
+dependencies[] = omniture
+package = Statistics

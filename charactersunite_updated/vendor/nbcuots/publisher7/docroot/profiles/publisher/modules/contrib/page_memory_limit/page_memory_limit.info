@@ -1,0 +1,10 @@
+name = Page memory limit
+description = Allows you to set an array of PHP memory limits keyed by page path in $conf.
+core = 7.x
+
+; Information added by Drupal.org packaging script on 2014-08-27
+version = "7.x-1.1"
+core = "7.x"
+project = "page_memory_limit"
+datestamp = "1409174630"
+

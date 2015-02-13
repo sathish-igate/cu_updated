@@ -1,0 +1,8 @@
+name = Publisher State Flow (deprecated)
+description = General modifications to compliment State Flow.
+package = Publisher
+core = 7.x
+version = 7.x-1.0
+
+dependencies[] = pub_editorial
+dependencies[] = state_flow

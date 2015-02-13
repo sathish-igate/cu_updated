@@ -1,0 +1,10 @@
+
+.hidden {
+  display: none;
+}
+
+#preview-site {
+  float: right;
+  line-height: 18px;
+  padding: 5px 10px;
+}

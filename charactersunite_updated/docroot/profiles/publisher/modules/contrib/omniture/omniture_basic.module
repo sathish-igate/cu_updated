@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * This module is a basic example how to add variabled to Omniture SiteCatalyst.
+ * Creates variables from taxonomy terms, page title and user name.
+ */
+
+/**
+ * Implements hook_omniture_variables().
+ */
+function omniture_basic_omniture_variables() {
+  $variables = array();
+  if ($variable_name = variable_get('omniture_var_pagename', FALSE)) {
+    $variables[$variable_name] = strip_tags(drupal_get_title());
+  }
+  if ($variable_name = variable_get('omniture_var_username', FALSE)) {
+    global $user;
+    $variables[$variable_name] = format_username($user);
+  }
+
+  // Taxonomy specific stuff - only for nodes.
+  if (module_exists('taxonomy') && $node = menu_get_object()) {
+    $omniture_taxonomy = array();
+
+    $fields = field_info_instances('node', $node->type);
+    foreach ($fields as $field) {
+      if ($field['widget']['module'] != 'taxonomy') {
+        // Not a taxonomy field.
+        continue;
+      }
+      // @todo: what to do with multilingual terms?
+      if (isset($node->{$field['field_name']}[LANGUAGE_NONE][0]['taxonomy_term'])) {
+	foreach ($node->{$field['field_name']}[LANGUAGE_NONE] as $term) {
+          if ($variable_name = variable_get("omniture_vocabvidvar_{$term['taxonomy_term']->vid}", FALSE)) {
+            $omniture_taxonomy[$variable_name][] = $term['taxonomy_term']->name;
+          }
+        }
+      }
+    }
+
+    foreach ($omniture_taxonomy as $variable_name => $terms_for_omniture) {
+      $variables[$variable_name] = implode(',', $terms_for_omniture);
+    }
+  }
+
+  return array('variables' => $variables);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function omniture_basic_form_omniture_admin_settings_alter(&$form, &$form_state) {
+  // Allow setting a vocabulary into a variable.
+  if (module_exists('taxonomy')) {
+    $form['vocabs'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Vocabulary variables'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#description' => t('Define which vocabularies should be tracked by which SiteCatalyst variables. Only applies to the full node view (e.g. node/1 or the aliased version of a node). Leave blank to disable for a vocabulary. Multiple terms from a "Multiple select" vocabulary will be placed into a comma separated list.'),
+      '#weight' => '-4',
+    );
+
+    $vocabularies = taxonomy_get_vocabularies();
+    foreach ($vocabularies as $vid => $vocab) {
+      $form['vocabs']["omniture_vocabvidvar_{$vocab->vid}"] = array(
+        '#type' => 'textfield',
+        '#title' => t('Variable for %vocab', array('%vocab' => $vocab->name)),
+        '#default_value' => variable_get("omniture_vocabvidvar_{$vocab->vid}", FALSE),
+      );
+    }
+  }
+
+  $form['vars'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Variables'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#description' => t('Define some SiteCatalyst variables. Leave blank to not track certain variables.'),
+    '#weight' => '-5',
+  );
+
+  $form['vars']['omniture_var_pagename'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Variable for page title'),
+    '#default_value' => variable_get('omniture_var_pagename', FALSE),
+  );
+  $form['vars']['omniture_var_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Variable for user name'),
+    '#default_value' => variable_get('omniture_var_username', FALSE),
+  );
+}

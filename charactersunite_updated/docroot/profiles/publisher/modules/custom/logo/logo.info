@@ -1,0 +1,16 @@
+name = Logo Manager
+description = Allows users to schedule logos on different dates.
+package = Other
+core = 7.x
+version = 0.1-dev
+configure = admin/structure/logo/manage
+
+dependencies[] = ctools
+dependencies[] = date
+dependencies[] = date_popup
+dependencies[] = views
+
+files[] = logo.install
+files[] = logo.module
+files[] = tests/logo.test
+files[] = views/logo_views_handler_field_operations.inc

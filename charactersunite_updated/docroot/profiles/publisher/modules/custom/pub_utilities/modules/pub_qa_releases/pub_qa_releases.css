@@ -1,0 +1,19 @@
+#release_form {
+  padding: 0 10px;
+  border: 1px solid #ccc;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+}
+#release_form fieldset {
+  width: 49%;
+  float: left;
+  border: none;
+}
+#release_form fieldset:nth-child(even) {
+  border-right: 1px solid #ccc;
+}
+#release_form .form-submit {
+  display: block;
+  clear: left;
+  float: right;
+}

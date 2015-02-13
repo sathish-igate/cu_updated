@@ -1,0 +1,92 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function collection_schema() {
+  $schema = array();
+
+  $schema['collection'] = array(
+    'description' => t('Collection'),
+    'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique collection ID.',
+      ),
+      'name' => array(
+        'description' => 'The name of the collection.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'label' => array(
+        'description' => 'The name of the collection.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'description' => 'The status of the collection.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'module' => array(
+        'description' => 'The status of the collection.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('cid'),
+    'unique keys' => array(
+      'cid' => array('cid'),
+    ),
+    'indexes' => array(
+      'name' => array('name'),
+      'status' => array('status'),
+      'module' => array('module'),
+      'module-status' => array('module', 'status'),
+    ),
+  );
+
+  $schema['cache_entity_collection'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_entity_collection']['description'] = "Cache table used to store collection entity records.";
+
+  return $schema;
+}
+
+/**
+ * Update permission names.
+ */
+function collection_update_7100() {
+  $permissions = array(
+    'administer collection' => 'administer collections',
+    'create collection' => 'create collections',
+    'edit collection' => 'edit collections',
+    'view collection' => 'view collections',
+    'delete collection' => 'delete collections',
+  );
+  foreach ($permissions as $old => $new) {
+    db_update('role_permission')
+      ->fields(array('permission' => $new))
+      ->condition('permission', $old)
+      ->execute();
+  }
+}
+
+/**
+ * Add the {cache_entity_collection} table in case entitycache.module is used.
+ */
+function collection_update_7101() {
+  if (module_exists('entitycache') && !db_table_exists('cache_entity_collection')) {
+    $table = drupal_get_schema_unprocessed('system', 'cache');
+    $table['description'] = "Cache table used to store collection entity records.";
+    db_create_table('cache_entity_collection', $table);
+  }
+}

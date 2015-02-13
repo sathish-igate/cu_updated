@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Schema feature.
+ */
+
+include_once 'pub_schema.features.inc';

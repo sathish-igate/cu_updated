@@ -1,0 +1,91 @@
+<?php
+/**
+ * @file
+ * Module file for demonstrating how to use the program guide.
+ */
+
+/**
+ * Implements hook_block_info().
+ */
+function program_guide_example_block_info() {
+  $blocks['program_guide'] = array(
+    'info' => t('Program Guide'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function program_guide_example_block_view($delta) {
+  $block = array();
+
+  switch ($delta) {
+    case 'program_guide':
+      $block['subject'] = t('Program Guide');
+      $block['content'] = program_guide_example_get_guide();
+      break;
+  }
+  return $block;
+}
+
+/**
+ * Builds a program guide and returns a render array.
+ *
+ * @return array
+ *   A drupal render array.
+ */
+function program_guide_example_get_guide() {
+  $guide = array(
+    '#theme' => 'table',
+    '#header' => array(
+      t('Date'),
+      t('Show'),
+      t('Information'),
+    ),
+    '#sticky' => TRUE,
+    '#empty' => t('There is no data'),
+  );
+
+  $query = new EntityFieldQuery();
+
+  $query->entityCondition('entity_type', 'program')
+    ->propertyCondition('end_time', time(), '>')
+    ->propertyOrderBy('start_time', 'ASC')
+    ->range(0, 25);
+
+  $result = $query->execute();
+
+  $rows = array();
+  if (isset($result['program'])) {
+    $program_guids = array_keys($result['program']);
+    $programs = entity_load('program', $program_guids);
+
+    // We are including a tiny bit of styling here for convenience. You should
+    // handle this styling in your theme.
+    foreach ($programs as $program) {
+      $rows[] = array(
+        array(
+          'data' => date('m/d', $program->start_time) . ' ' . date('h:ia T', $program->start_time),
+          'style' => 'width: 15%',
+          'valign' => 'top',
+        ),
+        array(
+          'data' => '<h3>' . $program->parent_title . '</h3></br>season: ' . $program->season_number . ', episode:' . $program->season_episode_number,
+          'style' => 'width: 25%',
+          'valign' => 'top',
+        ),
+        array(
+          'data' => '<h4>' . $program->title . '</h4></br>' . $program->raw['pllisting$program']['pl$description'],
+          'style' => 'width: 60%',
+          'valign' => 'top',
+        ),
+      );
+    }
+  }
+
+  $guide['#rows'] = $rows;
+  return $guide;
+}

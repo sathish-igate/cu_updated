@@ -1,0 +1,99 @@
+<?php
+
+/**
+ * @file
+ * Pub SURF example module file.
+ *
+ * Example module for surf configurations.
+ */
+
+/**
+ * Implements hook_library().
+ */
+function pub_surf_example_library() {
+
+  $libraries['surf.example'] = array(
+    'title' => 'NBCU Pub Surf',
+    'website' => 'http://surfexample-prod.com/',
+    'version' => '1.0',
+    'js' => array(
+      drupal_get_path('module', 'pub_surf_example') . '/pub_surf_example.js' => array(
+        'type' => 'file',
+        'group' => JS_LIBRARY,
+        'scope' => 'footer',
+      ),
+    ),
+    'dependencies' => array(
+      array('surf', 'jquery.tmpl'),
+      array('surf', 'surf.session'),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Implements hook_surf_settings_alter().
+ */
+function pub_surf_example_surf_settings_alter(&$data) {
+  // $data['responsive'] = FALSE;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function pub_surf_example_block_info() {
+
+  $blocks['surf-login'] = array(
+    'info' => t('Surf Example Actions'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+
+  $blocks['surf-content'] = array(
+    'info' => t('Surf Example Content'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function pub_surf_example_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'surf-login':
+      $block['subject'] = t('SURF');
+      $block['content'] = array(
+        '#theme' => 'surf_actions_block',
+      );
+      break;
+
+    case 'surf-content':
+      $block['subject'] = '';
+      $block['content'] = array(
+        '#theme' => 'surf_content_block',
+      );
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function pub_surf_example_theme() {
+  return array(
+    'surf_actions_block' => array(
+      'variables' => array(),
+      'template' => 'templates/surf-actions',
+    ),
+    'surf_content_block' => array(
+      'variables' => array(),
+      'template' => 'templates/surf-content',
+    ),
+  );
+}

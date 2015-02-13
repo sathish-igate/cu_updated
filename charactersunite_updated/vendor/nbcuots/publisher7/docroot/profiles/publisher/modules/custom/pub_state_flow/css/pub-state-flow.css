@@ -1,0 +1,24 @@
+.highlight-text {
+  background: #d3d3d3;
+  padding: 5px;
+  margin-bottom: 5px
+}
+
+.current-revision .fieldset-wrapper{
+  padding-top: 5px;
+}
+
+.current-revision .form-item {
+  display: inline;
+  margin-right: 100px;
+}
+
+.current-revision .actions,
+.current-revision .form-item label{
+  display: inline;
+}
+
+.current-revision .actions {
+  float: right;
+  margin-right: 10px;
+}

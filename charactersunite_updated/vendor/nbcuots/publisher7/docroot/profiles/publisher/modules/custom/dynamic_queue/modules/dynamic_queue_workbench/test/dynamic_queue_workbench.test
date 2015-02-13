@@ -1,0 +1,113 @@
+<?php
+
+/**
+ * @file
+ * Tests for Dynamic Queue Workbench.
+ */
+
+/**
+ * Class DynamicQueueWorkbenchTestCase.
+ */
+class DynamicQueueWorkbenchTestCase extends PublisherWebTestCase {
+  /**
+   * The admin user that will be created.
+   */
+  protected $admin;
+
+  /**
+   * Gets information about this test case.
+   *
+   * @return array
+   *   Array containing the keys name, description and group.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Dynamic Queue Workbench',
+      'description' => 'Verify Dynamic Queue revisioning',
+      'group' => 'Dynamic Queue Workbench',
+    );
+  }
+
+  /**
+   * Sets up the test site.
+   */
+  public function setUp() {
+    parent::setUp('dynamic_queue', 'dynamic_queue_workbench');
+  }
+
+  /**
+   * Tests the Dynamic Queue revisioning functionality.
+   */
+  public function testDynamicQueueRevisioning() {
+
+    // Create and login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Create a movie node.
+    $movie_title = $this->randomName(8);
+    $synopsis = $this->randomName(20);
+    $show_settings = array(
+      'title' => $movie_title,
+      'type' => 'movie',
+      'body' => array(
+        LANGUAGE_NONE => array(
+          0 => array(
+            'value' => $synopsis,
+            'format' => 'wysiwyg_mini',
+          ),
+        ),
+      ),
+      'field_tv_cover_media' => array(LANGUAGE_NONE => array(0 => array('fid' => 1, 'display' => 1))),
+      'event' => 'to_published',
+      'event_comment' => $this->randomString(20),
+      'status' => 1,
+    );
+    $show = $this->drupalCreateNode($show_settings);
+    $this->assert(!empty($show->nid), 'The Movie node has been created.');
+
+    // Create dynamic queue type.
+    $label = $this->randomName(8);
+    $type = strtolower($label);
+    $edit = array(
+      'label' => $label,
+      'type' => $type,
+      'entity_type' => 'node',
+      'dynamic_queue_number_of_revs_displayed' => '0',
+      'cache_lifetime' => '86400',
+    );
+    $this->drupalPost('admin/structure/dynamic-queue/add', $edit, t('Save'));
+    $this->assertRaw($label, 'The dynamic queue type has been created.');
+
+    // Create dynamic queue.
+    $title = $this->randomName(8);
+    $edit = array(
+      'title' => $title,
+      'settings[target_bundles][movie]' => 'movie',
+      'settings[sort]' => 'dynamic_queue_newest',
+      'settings[tv_show_select]' => '0',
+    );
+    $this->drupalPost('admin/content/dynamic-queue/add/' . $type, $edit, t('Save Dynamic Queue'));
+    $this->assertRaw($title, 'The dynamic queue has been created.');
+
+    // Create a new revision of same dynamic queue.
+    $new_title = $this->randomName(8);
+    $edit = array(
+      'title' => $new_title,
+    );
+    $this->drupalPost('dynamic-queue/1/edit', $edit, t('Save Dynamic Queue'));
+
+    // Make latest revision published.
+    $edit = array(
+      'event' => 'publish',
+      'event_comment' => $this->randomName(20),
+    );
+    $this->drupalPost('dynamic-queue/1/revisions-state-flow-states', $edit, t('Update State'));
+    $this->drupalGet('dynamic-queue/1/revisions-state-flow-states');
+    $this->assertRaw('state-Published', 'The dynamic queue revision is published.');
+
+    // Visit the dynamic queue page and check if the movie is displayed.
+    $this->drupalGet('dynamic-queue/1');
+    $this->assertRaw($movie_title, 'The dynamic queue render displays the movie.');
+  }
+}

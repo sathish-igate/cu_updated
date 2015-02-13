@@ -1,0 +1,11 @@
+name = Dynamic Queue Workbench
+description = Workbench and State Machine support for Dynamic Queue entities.
+core = 7.x
+
+dependencies[] = dynamic_queue
+dependencies[] = workbench_moderation
+dependencies[] = workbench_workflows
+dependencies[] = views
+
+files[] = plugins/dynamic_queue_state_machine.inc
+files[] = test/dynamic_queue_workbench.test

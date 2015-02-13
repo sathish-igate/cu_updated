@@ -1,0 +1,67 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_person module.
+ */
+
+/**
+ * Revert Feature on update. Sets Birthdate field to blank.
+ */
+function pub_person_update_7000() {
+  _profiles_all_features_revert(array('pub_person'));
+}
+
+/**
+ * Migrate person_external_urls fields to person_external_links fields. This
+ * uses the Batch API and will automatically loop everything in the function
+ * as long as $sandbox['#finished'] is false.
+ */
+function pub_person_update_7001(&$sandbox) {
+  // Revert feature.
+  if (!isset($sandbox['current_index'])) {
+    drupal_flush_all_caches();
+    // The "_profiles_all_features_revert" function no longer does anything. Sites
+    // should revert their features manually or as part of a deployment.
+    _profiles_all_features_revert(array('pub_person'));
+  }
+
+  $t = get_t();
+
+  // Initialize.
+  if (!isset($sandbox['current_index']) && field_info_field('field_person_external_urls') && field_info_field('field_person_external_links')) {
+    $sandbox['current_index'] = 0;
+    $query_result = db_query("SELECT entity_id, field_person_external_urls_value FROM field_data_field_person_external_urls");
+    $total_rows = $query_result->rowCount();
+    $sandbox['total'] = $total_rows;
+  }
+
+  $nodes_per_batch = 5;
+
+  // Get data.
+  $batch_result = db_query_range("SELECT entity_id, field_person_external_urls_value FROM field_data_field_person_external_urls", $sandbox['current_index'], $nodes_per_batch);
+
+  // Migrate data.
+  if ($batch_result && field_info_field('field_person_external_urls') && field_info_field('field_person_external_links')) {
+    while ($row = $batch_result->fetchAssoc()) {
+      $node = node_load($row['entity_id']);
+      $node->field_person_external_links[LANGUAGE_NONE][]['url'] = $row['field_person_external_urls_value'];
+      node_save($node);
+      $sandbox['current_index'] ++;
+      drupal_set_message(t("Successfully migrated 1 URL field for node @nid.", array('@nid' => $row['entity_id']))); //@todo make watchdog
+     }
+   }
+  // Check if batch needs to run again.
+  $sandbox['#finished'] = ($sandbox['total'] <= 0) ? 1 : ($sandbox['current_index'] / $sandbox['total']);
+
+  // Batch is complete, time to finish.
+  if ($sandbox['#finished'] == 1) {
+    // Delete old data.
+    field_delete_field('field_person_external_urls');
+    field_purge_batch(1000);
+
+    if (!field_info_field('field_person_external_urls')) {
+      drupal_set_message($t('Old fields have been deleted.'));
+    }
+  }
+}

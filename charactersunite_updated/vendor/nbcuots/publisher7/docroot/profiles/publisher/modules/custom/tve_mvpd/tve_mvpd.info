@@ -1,0 +1,8 @@
+name = TVE MVPD
+description = Bridge between TVE and MVPD service.
+core = 7.x
+package = NBCU TVE
+dependencies[] = jquery_update
+dependencies[] = ctools
+scripts[] = js/tve_mvpd.js
+configure = admin/config/services/mvpd/connection

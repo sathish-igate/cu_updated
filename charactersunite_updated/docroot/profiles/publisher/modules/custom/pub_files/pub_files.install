@@ -1,0 +1,33 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_files module.
+ */
+
+/**
+ * Set role permissions for file_entity module.
+ */
+function pub_files_update_7000() {
+  $existing_roles = user_roles();
+  $rids = array_flip($existing_roles);
+
+  user_role_grant_permissions($rids['editor'], array('edit any files', 'view own files', 'delete own files', 'view own private files', 'edit own files', 'create files'));
+  user_role_grant_permissions($rids['administrator'], array('delete any files', 'administer files', 'edit any files', 'view own files', 'delete own files', 'view own private files', 'edit own files', 'create files'));
+  user_role_grant_permissions($rids['moderator'], array('edit any files', 'view own files', 'delete own files', 'view own private files', 'edit own files', 'create files'));
+  user_role_grant_permissions($rids['contributor'], array('view own files', 'delete own files', 'view own private files', 'edit own files', 'create files'));
+}
+
+/**
+ * Set pub_files to run after the imagefield_focus.
+ */
+function pub_files_update_7001() {
+  db_query("UPDATE {system} SET `weight` = '2' WHERE `name` = 'pub_files'");
+}
+
+/**
+ * Enable the file_lock module.
+ */
+function pub_files_update_7002() {
+  module_enable(array('file_lock'));
+}

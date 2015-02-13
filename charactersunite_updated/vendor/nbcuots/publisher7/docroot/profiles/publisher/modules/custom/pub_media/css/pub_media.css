@@ -1,0 +1,40 @@
+/** Publisher Custom Image Edit **/
+
+.image-top-wrapper {
+  border: 1px solid #c6c6c6;
+}
+
+.file-entity-panel {
+  float: left;
+  width: 45%;
+  padding: 2%;
+}
+
+.file-entity-right-view {
+  border-left: 1px solid #c6c6c6;
+}
+
+.file-entity-right-view .form-item{
+  margin: 0;
+}
+
+.file-entity-right-view label {
+  display: inline-block;
+  width: 120px;
+}
+
+/* focus/crop area */
+#edit-imagefield-focus .form-type-textfield,
+.page-admin-content-file-edit-multiple .media-multiedit-form fieldset.form-wrapper .form-type-textfield {
+  float: left;
+  width: 201px;
+  clear: left;
+}
+.focus-box div.imgfocus-wrapper {
+  overflow: hidden;
+  max-height: 320px;
+  max-width: 320px;
+  width: auto !important; /* overwrite contrib js that makes this really tiny */
+  height: auto !important; /* overwrite contrib js that makes this really tiny */
+}
+/** End of Publisher Custom image Edit **/

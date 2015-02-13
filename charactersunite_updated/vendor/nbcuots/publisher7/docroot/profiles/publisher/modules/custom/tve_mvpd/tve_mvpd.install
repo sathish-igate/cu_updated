@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ * Install/uninstall/update functions for TVE MVPD module.
+ *
+ * @ingroup tve_mvpd
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function tve_mvpd_uninstall() {
+  variable_del('tve_mvpd_configured_providers');
+  variable_del('tve_mvpd_default_settings');
+  variable_del('tve_mvpd_service');
+  variable_del('tve_mvpd_brand_id');
+  variable_del('tve_mvpd_instance');
+  variable_del('tve_mvpd_error_message');
+  variable_del('tve_mvpd_service_url');
+}
+
+/**
+ * Implements hook_install().
+ */
+function tve_mvpd_install() {
+  variable_set('tve_mvpd_default_settings', array(
+    'mvpd_logo' => 'field_mvpd_logo_dark',
+    'mvpd_color' => 'field_mvpd_light_color',
+  ));
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function tve_mvpd_requirements($phase) {
+  $t = get_t();
+  if ('runtime' == $phase) {
+    $jquery_version_required = '1.7';
+    $jquery_version = variable_get('jquery_update_jquery_version', $t('n/a'));
+    $requirements['tve_mvpd_dependency'] = array(
+      'title' => 'TVE MVPD dependency',
+      'description' => $t('jQuery library version %jquery_ver or greater required.',
+        array('%jquery_ver' => $jquery_version_required)
+      ),
+      'value' => $t('jQuery ver. %jquery_ver',
+        array('%jquery_ver' => $jquery_version)
+      ),
+      'severity' => REQUIREMENT_OK,
+    );
+
+    if (version_compare($jquery_version, $jquery_version_required, 'lt')) {
+      $requirements['tve_mvpd_dependency']['severity'] = REQUIREMENT_ERROR;
+    }
+
+    return $requirements;
+  }
+}
+
+/**
+ * Rename variable 'tve_mvpd_providers' to 'tve_mvpd_configured_providers'.
+ */
+function tve_mvpd_update_7100($phase) {
+  // @todo Move variable tve_mvpd_overridden_providers
+  $old_variable = variable_get('tve_mvpd_providers');
+  if (!empty($old_variable)) {
+    variable_set('tve_mvpd_configured_providers', $old_variable);
+    variable_del('tve_mvpd_providers');
+  }
+}

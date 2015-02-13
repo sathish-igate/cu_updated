@@ -1,0 +1,30 @@
+name = characterunite
+description = A flexible, recolorable theme with many regions.
+core = 7.x
+
+stylesheets[all][] = css/cu_cantarell.css
+stylesheets[all][] = css/cu_style.css
+stylesheets[all][] = css/cu_override_style.css
+stylesheets[all][] = css/cu_fancybox.css
+
+scripts[] = js/modernizr-2.0.6.min.js
+scripts[] = js/jquery.min.js
+scripts[] = js/jquery.tools.min.js
+scripts[] = js/jquery.fancybox.js
+scripts[] = js/script.js
+
+regions[header] = Header
+regions[header_unite] = Unite Live Header
+regions[help] = Help
+regions[page_top] = Page top
+regions[page_bottom] = Page bottom
+regions[highlighted] = Highlighted
+
+regions[content] = Content
+regions[featured] = Featured
+regions[sidebar] = Sidebar
+regions[facebook_discussion] = Facebook Discussion
+regions[spread_the_word] = Spread the word
+regions[social] = Social
+
+regions[footer] = Footer

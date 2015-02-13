@@ -1,0 +1,14 @@
+.ctools-dropbutton-processed {
+  position: relative;
+}
+
+table .views-field-representative-image .theplatform-video,
+ .view-content-files .theplatform-video {
+  width: 60%;
+  height: 60%;
+}
+
+.form-item-instance-widget-settings-soft-length-style-select,
+.form-item-soft-length-style-select {
+  display: none;
+}

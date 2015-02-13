@@ -1,0 +1,21 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Hide Submit feature.
+ */
+
+include_once 'pub_hide_submit.features.inc';
+
+/**
+ * Implements hook_hide_submit_alter().
+ *
+ * Add Hide Submit functionality to the module administration page to prevent
+ * multiple submissions. Without this Features breaks badly and goes on a
+ * rampage and disables 20+ modules.
+ */
+function pub_hide_submit_hide_submit_alter(&$hide_submit_settings) {
+  $current_path = current_path();
+  if (!($current_path === 'admin/modules') && !($current_path === 'admin/modules/list/confirm')) {
+    $hide_submit_settings['hide_submit']['hide_submit_status'] = FALSE;
+  }
+}

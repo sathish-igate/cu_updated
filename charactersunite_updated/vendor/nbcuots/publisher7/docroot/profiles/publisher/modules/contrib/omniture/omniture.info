@@ -1,0 +1,7 @@
+name = Omniture
+description = Adds Omniture SiteCatalyst javascript tracking code to your site's pages.
+core = 7.x
+files[] = omniture.module
+files[] = omniture.install
+files[] = tests/omniture.test
+package = Statistics

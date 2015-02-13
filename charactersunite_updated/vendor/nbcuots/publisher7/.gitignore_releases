@@ -1,0 +1,8 @@
+
+# The ignore rules below are only applied released code. These rules are
+# appended to the normal .gitignore file when a release is built combining the
+# Publisher7 repo and a Site repo (ex: Publisher7_otstv).
+
+# Do not ignore any sites directories.
+!docroot/sites/*
+!docroot/sites/*/settings.*.php

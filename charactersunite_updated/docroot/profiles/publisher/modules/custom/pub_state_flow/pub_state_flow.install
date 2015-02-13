@@ -1,0 +1,29 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Publisher State Flow module.
+ */
+
+/**
+ * Set the State Machine date format on install.
+ */
+function pub_state_flow_install() {
+  pub_state_flow_update_7000();
+}
+
+/**
+ * Set the State Machine date format on update.
+ */
+function pub_state_flow_update_7000() {
+  variable_set('state_machine_date_format', 'edit_date');
+}
+
+/**
+ * If it isnt enabled, turn on the pub_editorial module.
+ */
+function pub_state_flow_update_7001() {
+  if (!module_exists('pub_editorial')) {
+    module_enable(array('pub_editorial'));
+  }
+}

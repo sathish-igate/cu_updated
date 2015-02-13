@@ -1,0 +1,10 @@
+.entityreference-live-preview {
+  float: left;
+  margin: 0px;
+  min-height: 1px;
+  width: 30%;
+}
+
+.entityreference-live-preview-container .form-item {
+  margin-left: 31%;
+}

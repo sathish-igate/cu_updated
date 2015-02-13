@@ -1,0 +1,6 @@
+name = Publisher TVE
+core = 7.x
+package = Publisher Feature Sets
+dependencies[] = pub_mpx
+dependencies[] = tve_mvpd
+dependencies[] = tve_adobe_pass

@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * @file
+ *
+ * Code for the Pub Movie Relationships module.
+ */
+
+define('MOVIE_FIELD_NAME', 'field_pub_relation_movie');
+require __DIR__ . '/pub_relationships_movie.field.inc';
+
+/**
+ * Implements hook_form__FORM_ID_alter()
+ *
+ * @see pub_relationships_config
+ */
+function pub_relationships_movie_form_pub_relationships_config_alter(&$form, &$form_state, $form_id) {
+  $content_types = node_type_get_names();
+  // If the movie content type is available lets prevent circular references.
+  if (!empty($content_types['movie'])) {
+    unset($content_types['movie']);
+  }
+
+  $form['movies_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Movies'),
+    '#description' => t('What content type should the Movies Relationship widget be attached to.'),
+    '#group' => 'wrapper',
+    '#weight' => 10,
+  );
+
+  $form['movies_settings']['pub_relationships_movie_content'] = array(
+    '#type' => 'checkboxes',
+    '#default_value' => variable_get('pub_relationships_movie_content', array()),
+    '#options' => $content_types,
+  );
+
+  // Add out custom submit function.
+  $form['#submit'][] = 'pub_relationships_movie_config_submit';
+}
+
+/**
+ * Submit function for pub_relationships_config().
+ *
+ * @see pub_relationships_movie_form_pub_relation_config_alter()
+ */
+function pub_relationships_movie_config_submit($form, &$form_state) {
+  // Lets make sure the checkbox are there before doing anything.
+  if (!empty($form_state['values']['pub_relationships_movie_content'])) {
+    $movie_bundles = $form_state['values']['pub_relationships_movie_content'];
+    foreach ($movie_bundles as $bundle => $value) {
+      if (!empty($value)) {
+        pub_relationships_movie_create_field_if_empty();
+        pub_relationships_movie_create_instance_if_empty($bundle);
+      }
+      else {
+        pub_relationships_movie_remove_instance_if_exists($bundle);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_relationships_movie_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['#node_edit_form']) && $form['#node_edit_form'] === TRUE) {
+    $bundle = $form['#bundle'];
+    if (pub_relationships_movie_bundle_is_enabled($bundle) && !empty($form[MOVIE_FIELD_NAME])) {
+      pub_relation_add_verticle_add_if_empty($form);
+      $form[MOVIE_FIELD_NAME]['#weight'] = 10;
+      $form['pub_relationships'][MOVIE_FIELD_NAME] = $form[MOVIE_FIELD_NAME];
+      // Unseting here is bad. Try not to play with Form API vs Field API much.
+      $form[MOVIE_FIELD_NAME]['#access'] = FALSE;
+    }
+  }
+}
+
+/**
+ * Simple API function to know if a Movie Relationship is enabled for this bundle.
+ */
+function pub_relationships_movie_bundle_is_enabled($bundle) {
+  $config = variable_get('pub_relationships_movie_content', array());
+
+  if (!empty($config[$bundle])) {
+    return TRUE;
+  }
+
+  return FALSE;
+}

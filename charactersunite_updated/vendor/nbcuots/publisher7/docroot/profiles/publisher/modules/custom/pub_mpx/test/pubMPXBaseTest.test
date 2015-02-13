@@ -1,0 +1,86 @@
+<?php
+
+/**
+ * @file
+ * Pub MPX Base test.
+ */
+
+/**
+ * Simple.
+ */
+class PublisherMPXTestCase extends PublisherWebTestCase {
+  public $mpxDrupal;
+  public $mpxUser;
+
+  /**
+   * MPX Test SetUp.
+   *
+   * This Sets up an MPX Account for you and imports data. Feel free to log in
+   * and do your testing.
+   */
+  protected function setUp() {
+    parent::setUp();
+
+    $this->mpxDrupal = $this->drupalCreateUser(array(
+      'administer mpx account',
+      'view the administration theme',
+      'administer files',
+    ));
+
+    // Log in as an admin.
+    $credentials = array(
+      'name' => $this->mpxDrupal->mail,
+      'pass' => $this->mpxDrupal->pass_raw,
+    );
+    // TODO: Override drupalLogin.
+    $this->drupalPost('user/login', $credentials, t('Log in'));
+
+    // Now lets set up the test MPX Account and sync some data.
+    $this->drupalGet('admin/config/media/theplatform');
+
+    // We're just going to post to it since MPX doesn't have a default.
+    $edit = array();
+    $edit['accounts[new][0][theplatform_username]'] = 'mpx/adminPub7QA';
+    $edit['accounts[new][0][theplatform_password]'] = 'Pa55word';
+    $this->drupalPost(NULL, $edit, t('Connect to MPX'));
+
+    // Set up MPX Account to be synced.
+    $edit = array();
+    $edit['import_accounts[settings][1]'] = 'DB%20TV';
+    $this->drupalPost(NULL, $edit, t('Set Import Account'));
+    $this->assertLink(t('the MPX video library page'));
+
+    // Set up SYNC MPX Media.
+    $this->clickLink(t('the MPX video library page'));
+    $edit = array();
+    $edit['video_sync[settings][1][default_player_id]'] = '31';
+    $this->drupalPost(NULL, $edit, t('Sync mpxMedia Now'));
+    $this->assertLink(t('Run cron'));
+
+    $this->cronRun();
+  }
+
+  /**
+   * Normal static getInfo() method.
+   *
+   * @return array
+   *   Test Information.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'MPX Set Up.',
+      'description' => ' Make sure the MPX set up works.',
+      'group' => 'Publisher',
+    );
+  }
+
+  /**
+   * See if we have content in files.
+   *
+   * The set up will do all the heavy lifting, this is just testing the setup.
+   */
+  public function testMPXAccount() {
+    // Check to make sure there are files.
+    $this->drupalGet('admin/content/file');
+  }
+}

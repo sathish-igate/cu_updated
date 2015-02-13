@@ -1,0 +1,251 @@
+<?php
+
+require_once('profiles/publisher/publisher.profile');
+if (!defined('PUB_PROFILE')) {
+  define('PUB_PROFILE', 'publisher');
+}
+
+/**
+ * @file
+ * Install functions for the publisher module.
+ */
+
+/**
+ * Implement hook_install().
+ *
+ * Perform actions to set up the site for this profile.
+ */
+function publisher_install() {
+  $profile = PUB_PROFILE;
+
+  if (module_exists('memcache')) {
+    _publisher_memcache_flush($profile);
+  }
+
+  _publisher_setup_blocks($profile);
+  _publisher_setup_users($profile);
+  _publisher_setup_menus($profile);
+  _publisher_setup_themes($profile);
+  _publisher_setup_wysiwyg($profile);
+  _publisher_setup_settings($profile);
+}
+
+/**
+ * Implements hook_install_tasks().
+ */
+function publisher_install_tasks() {
+  $t = get_t();
+
+  $tasks['publisher_tasks'] = array(
+    'display_name' => $t('Publisher Install Tasks'),
+    'display' => TRUE,
+    'type' => 'normal',
+    'run' => INSTALL_TASK_RUN_IF_REACHED,
+    'function' => 'publisher_install_final_tasks',
+  );
+
+  return $tasks;
+}
+
+/**
+ * Implements hook_install_final_tasks().
+ */
+function publisher_install_final_tasks() {
+  _publisher_setup_permissions(PUB_PROFILE);
+
+  // Need to clear caches late in the install process after xautoload was
+  // updated to 7.x-5.1.
+  cache_clear_all();
+}
+
+/**
+ * Implements hook_install_tasks_alter().
+ */
+function publisher_install_tasks_alter(&$tasks, $install_state) {
+  // Automate the "select locale" installation task.
+  $tasks['install_select_locale']['display'] = FALSE;
+  $tasks['install_select_locale']['function'] = '_publisher_set_language';
+}
+
+/**
+ * Submit function for the install configuration form.
+ */
+function publisher_form_install_configure_submit($form, &$form_state) {
+  // Set some sitecatalyst variables based on "division" and "brand".
+  // Just in case, we grab any existing sitecatalyst variables first.
+  $variables = variable_get('sitecatalyst_variables', array());
+  $variables[] = array(
+    'name' => 's.prop8',
+    'value' => $form_state['values']['division'],
+  );
+  $variables[] = array(
+    'name' => 's.prop9',
+    'value' => $form_state['values']['brand'],
+  );
+
+  variable_set('sitecatalyst_variables', $variables);
+
+  // Turn off poor man's cron by default.
+  variable_set('cron_safe_threshold', 0);
+}
+
+/**
+ * Implements hook_modules_install().
+ */
+function publisher_modules_installed($modules) {
+  // Check that our custom roles have been created. If not, create them.
+  $existing_roles = user_roles();
+  $custom_roles = array('editor', 'senior editor');
+  foreach ($custom_roles as $custom_role_name) {
+    if (!in_array($custom_role_name, $existing_roles)) {
+      $role = new stdClass();
+      $role->name = $custom_role_name;
+      user_role_save($role);
+    }
+  }
+
+  $existing_roles = user_roles();
+  $rids = array_flip($existing_roles);
+  foreach ($modules as $module) {
+    // Note that we can ignore "administrator" because core automatically grants
+    // administrator all permissions. @see user_modules_installed().
+    switch ($module) {
+      case 'acquia_cloud_sticky_sessions':
+        user_role_grant_permissions($rids['editor'], array('stick to Acquia web node'));
+        user_role_grant_permissions($rids['senior editor'], array('stick to Acquia web node'));
+      case 'admin_menu':
+        user_role_grant_permissions($rids['editor'], array('access navbar'));
+        user_role_grant_permissions($rids['senior editor'], array('access navbar'));
+        break;
+
+      case 'collections':
+        user_role_grant_permissions($rids['editor'], array(
+          'administer collections',
+          'create collections',
+          'edit collections',
+          'view collections',
+          'delete collections',
+          'access collection list',
+        ));
+        user_role_grant_permissions($rids['senior editor'], array(
+          'administer collections',
+          'create collections',
+          'edit collections',
+          'view collections',
+          'delete collections',
+          'access collection list',
+        ));
+        break;
+
+      case 'contextual':
+        user_role_grant_permissions($rids['editor'], array('access contextual links'));
+        user_role_grant_permissions($rids['senior editor'], array('access contextual links'));
+        break;
+
+      case 'file_entity':
+        user_role_grant_permissions($rids['anonymous user'], array('view files'));
+        user_role_grant_permissions($rids['authenticated user'], array('view files'));
+        user_role_grant_permissions($rids['editor'], array('administer files'));
+        user_role_grant_permissions($rids['senior editor'], array('administer files'));
+        user_role_grant_permissions($rids['administrator'], array('administer files'));
+        break;
+
+      case 'filter':
+        user_role_grant_permissions($rids['administrator'], array(
+          'administer filters',
+          'use text format ds_code',
+          'use text format markdown',
+          'use text format wysiwyg_basic',
+          'use text format wysiwyg_mini',
+        ));
+        user_role_grant_permissions($rids['editor'], array(
+          'administer filters',
+          'use text format ds_code',
+          'use text format markdown',
+          'use text format wysiwyg_basic',
+          'use text format wysiwyg_mini',
+        ));
+        user_role_grant_permissions($rids['senior editor'], array(
+          'administer filters',
+          'use text format ds_code',
+          'use text format markdown',
+          'use text format wysiwyg_basic',
+          'use text format wysiwyg_mini',));
+        break;
+
+      case 'media':
+        user_role_grant_permissions($rids['editor'], array('access media browser'));
+        user_role_grant_permissions($rids['senior editor'], array('access media browser'));
+        break;
+
+      case 'media_internet':
+        user_role_grant_permissions($rids['editor'], array('add media from remote sources'));
+        user_role_grant_permissions($rids['senior editor'], array('add media from remote sources'));
+        break;
+
+      case 'metatag':
+        user_role_grant_permissions($rids['editor'], array('administer meta tags', 'edit meta tags'));
+        user_role_grant_permissions($rids['senior editor'], array('administer meta tags', 'edit meta tags'));
+        break;
+
+      case 'node':
+        user_role_grant_permissions($rids['anonymous user'], array('access content'));
+        user_role_grant_permissions($rids['authenticated user'], array('access content'));
+        user_role_grant_permissions($rids['administrator'], array('view own unpublished content'));
+        user_role_grant_permissions($rids['editor'], array(
+          'administer nodes',
+          'access content overview',
+          'view own unpublished content',
+          'view revisions',
+          'revert revisions',
+          'delete revisions'));
+        user_role_grant_permissions($rids['senior editor'], array(
+          'administer nodes',
+          'access content overview',
+          'view own unpublished content',
+          'view revisions',
+          'revert revisions',
+          'delete revisions',
+        ));
+        break;
+
+      case 'nodequeue':
+        user_role_grant_permissions($rids['editor'], array('manipulate queues'));
+        user_role_grant_permissions($rids['senior editor'], array('manipulate queues'));
+        break;
+
+      case 'overlay':
+        user_role_grant_permissions($rids['anonymous user'], array('access overlay'));
+        user_role_grant_permissions($rids['authenticated user'], array('access overlay'));
+        break;
+
+      case 'password_policy':
+        // Note we are revoking permissions here.
+        user_role_revoke_permissions($rids['administrator'], array(
+          'administer password policies',
+          'unblock expired accounts',
+          'force password change'));
+        break;
+
+      case 'shortcut':
+        user_role_grant_permissions($rids['authenticated user'], array(
+          'administer shortcuts',
+          'customize shortcut links',
+          'switch shortcut sets'));
+        break;
+
+      case 'state_flow':
+        user_role_grant_permissions($rids['editor'], array('administer content revisions'));
+        user_role_grant_permissions($rids['senior editor'], array('administer content revisions'));
+        break;
+
+      case 'system':
+        user_role_grant_permissions($rids['authenticated user'], array('access administration pages'));
+        break;
+
+      case 'user':
+        user_role_grant_permissions($rids['authenticated user'], array('change own username'));
+        break;
+    }
+  }
+}

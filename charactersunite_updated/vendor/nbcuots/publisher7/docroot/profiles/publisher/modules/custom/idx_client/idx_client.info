@@ -1,0 +1,10 @@
+name = IDX Client
+description = Provides IDX service integration.
+core = 7.x
+version = 7.x-1.0
+package = Publisher
+
+configure = admin/config/services/idx_client
+
+files[] = classes/IDXClient.class.php
+files[] = classes/IDXClientWrapper.class.php

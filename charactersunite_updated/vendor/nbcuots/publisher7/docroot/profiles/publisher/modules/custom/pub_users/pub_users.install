@@ -1,0 +1,41 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function pub_users_install() {
+  $policy = array(
+    'digit' => 2,
+    'history' => 'all',
+    'length' => 8,
+    'letter_placement' => 1,
+    'lowercase' => 1,
+    'username' => 1,
+  );
+
+  db_insert('password_policy')
+    ->fields(array(
+      'name' => 'NBCU Password Policy',
+      'description' => 'The NBCU password policy rules.',
+      'enabled' => 1,
+      'policy' => serialize($policy),
+      'expiration' => 365,
+      'warning' => '30,14,7,2,1',
+    ))
+    ->execute();
+
+  db_insert('password_policy_role')
+    ->fields(array(
+      'pid' => 1,
+      'rid' => 2,
+    ))
+    ->execute();
+}
+
+/**
+ * Turn on the email_login module to only allow users to login via email, and
+ * not via username.
+ */
+function pub_users_update_7000() {
+  module_enable(array('email_login'));
+}

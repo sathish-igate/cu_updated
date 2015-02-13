@@ -1,0 +1,13 @@
+name = Pub Image Styles
+description = Shared Image Styles for Publisher 7
+core = 7.x
+package = Publisher
+version = 7.x-1.0
+project = pub_image_styles
+dependencies[] = ctools
+dependencies[] = image
+dependencies[] = strongarm
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[image][] = promoted_content
+features[variable][] = imagefield_focus_media_settings

@@ -1,0 +1,33 @@
+<?php
+
+/**
+ * @file
+ * Publisher smoke test for the default installation profile.
+ */
+
+/**
+ * Simple.
+ */
+class PublisherProfileTestCase extends PublisherWebTestCase {
+
+  /**
+   * Normal static getInfo() method.
+   *
+   * @return array
+   *   Test Information.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Smoke Test Publisher profile.',
+      'description' => ' Make sure the installation process works as expected.',
+      'group' => 'Publisher',
+    );
+  }
+
+  /**
+   * Simply visit the /user/login page and make sure no errors are thrown.
+   */
+  public function testPublisherUserLogin() {
+    $this->drupalGet('user/login');
+  }
+}

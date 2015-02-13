@@ -1,0 +1,85 @@
+<?php
+/**
+ * @file
+ * Module file for pub_analytics.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Modifies the sitecatalyst settings form.
+ */
+function pub_analytics_form_sitecatalyst_admin_settings_alter(&$form, &$form_state) {
+  // Add a description to the image location field.
+  if (empty($form['general']['sitecatalyst_image_file_location']['#default_value'])) {
+    $form['general']['sitecatalyst_image_file_location']['#description'] = t('Contact the NBCU Research team for this value. If it is left blank users without javascript will not be tracked.');
+  }
+
+  // Add a Report Suite ID field.
+  $form['general']['sitecatalyst_report_suite_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Report Suite ID'),
+    '#required' => TRUE,
+    '#default_value' => variable_get('sitecatalyst_report_suite_id', ''),
+    '#weight' => -100,
+  );
+  if (empty($form['general']['sitecatalyst_report_suite_id']['#default_value'])) {
+    $form['general']['sitecatalyst_report_suite_id']['#description'] = t('Contact the NBCU Research team for this value. No tracking data will be recorded without this value.');
+  }
+
+  // Add a TVE Specific Suite ID field.
+  if (module_exists('tve_auth') || module_exists('tve_auth2')) {
+    $form['general']['sitecatalyst_tve_report_suite_id'] = array(
+      '#type' => 'textfield',
+      '#title' => t('TVE Report Suite ID'),
+      '#required' => TRUE,
+      '#default_value' => variable_get('sitecatalyst_tve_report_suite_id', ''),
+      '#weight' => -100,
+    );
+  }
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function pub_analytics_page_alter(&$page) {
+  if (path_is_admin(current_path())) {
+    // No need to track admin pages.
+    return;
+  }
+
+  if (isset($page['page_bottom']['sitecatalyst'])) {
+    $report_id = variable_get('sitecatalyst_report_suite_id', '');
+    if (!empty($report_id)) {
+      $script = '<script type="text/javascript" language="JavaScript">var s_account="' . variable_get('sitecatalyst_report_suite_id', '') . '";</script>';
+      $page['page_bottom']['sitecatalyst']['header']['#markup'] = str_replace("-->", "-->\n" . $script, $page['page_bottom']['sitecatalyst']['header']['#markup']);
+
+      if (module_exists('tve_auth') || module_exists('tve_auth2')) {
+        drupal_add_js(array(
+          'analytics' => array(
+            'brandSuiteId' => variable_get('sitecatalyst_report_suite_id', ''),
+            'tveSuiteId' => variable_get('sitecatalyst_tve_report_suite_id', ''),
+          ),
+        ), 'setting');
+        drupal_add_js(drupal_get_path('module', 'pub_analytics') . '/js/tve-analytics.js', array('type' => 'file', 'scope' => 'footer'));
+      }
+    }
+    else {
+      // If the report suite ID has not been entered, we do not want to display
+      // any site catalyst code.
+      unset($page['page_bottom']['sitecatalyst']);
+    }
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function pub_analytics_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'page_alter') {
+    // Force pub_analytics_page_alter() to be called after
+    // sitecatalyst_page_alter().
+    unset($implementations['pub_analytics']);
+    $implementations['pub_analytics'] = FALSE;
+  }
+}

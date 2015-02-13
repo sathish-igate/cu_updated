@@ -1,0 +1,155 @@
+<?php
+
+/**
+ * Implemenation of hook_menu().
+ */
+function pub_sync_db_menu() {
+  $items['admin/utilities/sync_db'] = array(
+    'title' => 'Sync Database',
+    'description' => 'Sync a database from source to destination.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_sync_db_sync_form'),
+    'access arguments' => array('use publisher utilities'),
+  );
+
+  return $items;
+}
+
+/**
+ * Form builder for the sync database tool.
+ */
+function pub_sync_db_sync_form($form, &$form_state) {
+  // Get existing values of Site form elements used during AJAX callbacks.
+  $site_names = publisher_utilities_sites();
+  $site_name = isset($form_state['values']['site_source']['site_name']) ? $form_state['values']['site_source']['site_name'] : '';
+  $destinations = publisher_utilities_destinations($site_name, TRUE);
+
+  // Remove the "releases" destination if it exists. This is the production
+  // instance of a site, and we should never be overwriting the prod database.
+  $releases = array_search('releases', $destinations);
+  if ($releases !== FALSE) {
+    unset($destinations[$releases]);
+  }
+
+  $form = array(
+    '#attributes' => array(
+      'id' => 'sync_db_form',
+      'class' => array('clearfix'),
+    ),
+  );
+  $form['title'] = array(
+    '#markup' => '<h3>' . t('Sync a Database.') . '</h3>',
+  );
+
+  $form['site_source'] = array(
+    '#type' => 'fieldset',
+    '#description' => t("Choose the source site which the database will be sync'd from."),
+    '#collabsible' => FALSE,
+    '#title' => 'Source: site',
+    '#tree' => TRUE,
+  );
+  $form['site_source']['site_name'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc($site_names),
+    '#title' => t('Name'),
+    '#required' => TRUE,
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_sync_db_sync_form_ajax_callback',
+      'wrapper' => 'sync_db_form',
+    ),
+  );
+
+  // The default description to be used for the destination form field.
+  $form_destination_description = 'The database will be sync\'d on the selected cloud-based destination.';
+
+  // Add the "local" destination if this is running on a local development
+  // machine. This enables developers to copy the database down locally via the
+  // GUI. Also, change the description of the destination form field to reflect
+  // the option to sync locally.
+  if (!empty($_ENV['AH_SITE_ENVIRONMENT']) && "local" === $_ENV['AH_SITE_ENVIRONMENT']) {
+    $destinations[] = "local";
+    $form_destination_description = 'The database will be sync\'d on the selected cloud-based (or local) destination.';
+  }
+
+  $form['destination'] = array(
+    '#type' => 'fieldset',
+    '#description' => t($form_destination_description),
+    '#collabsible' => FALSE,
+    '#title' => 'Destination',
+    '#tree' => TRUE,
+  );
+  $form['destination']['instance'] = array(
+    '#type' => 'select',
+    '#options' => !empty($destinations) ? drupal_map_assoc($destinations) : array(),
+    '#title' => t('Instance'),
+    '#required' => TRUE,
+    '#empty_option' => empty($site_name) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="site_source[site_name]"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Sync Database'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit function for the Sync DB Form.
+ */
+function pub_sync_db_sync_form_submit($form, $form_state) {
+  _pub_sync_db_do_sync($form_state['values']);
+
+  // Get the site alias based on what instance and site the user has selected.
+  $destination_site_alias = _pub_utilities_get_site_alias($form_state['values']['destination']['instance'], $form_state['values']['site_source']['site_name']);
+
+  // Due to difficulties reverting and reloading Features via drush and update
+  // hooks, the post deploy scripts have been disabled for the time being.
+  // Run post deploy commands.
+  // _pub_utilities_post_deploy($destination_site_alias);
+}
+
+/**
+ * Sync function to sync db from source site to destination.
+ */
+function _pub_sync_db_do_sync($values) {
+  $drush = realpath(variable_get('pub_utilities_drush_bin', ''));
+  $source_site_alias = '@' . $values['site_source']['site_name'] . '.prod';
+
+  // Get the site alias based on what instance and site the user has selected.
+  $destination_site_alias = _pub_utilities_get_site_alias($values['destination']['instance'], $values['site_source']['site_name']);
+
+  // Drop tables in the target database so it ends up matching the structure of
+  // the source database.
+  $cmd = $drush . ' ' . $destination_site_alias . ' sql-drop -y';
+  _pub_utilities_exec($cmd);
+
+  // Sync the database. --target-dump and --source-dump are necessary to make
+  // the sync work between two remote sites. For some reason, after sql-drop,
+  // the rsync step to send the database dump to the target fails without using
+  // --target-dump and --source-dump.
+  // The --structure-tables-key parameter uses the
+  // $options['structure-tables']['common'] array defined in drushrc.php to
+  // determine what tables' data to skip.
+  $cmd = $drush . ' sql-sync ' . $source_site_alias . ' ' . $destination_site_alias . ' --target-dump --source-dump --structure-tables-key=common --no-cache -v -y';
+  _pub_utilities_exec($cmd);
+
+  // The sqlsan process resets the user passwords and email addresses in the
+  // target db to the value indicated with --sanitize-password, and a drush
+  // default for the emails.
+  $cmd = $drush . ' ' . $destination_site_alias . ' sqlsan --sanitize-password=pa55word --sanitize-email=user+%uid@example.com -y';
+  _pub_utilities_exec($cmd);
+}
+
+/**
+ * Callback function refreshes the sync db form.
+ */
+function _pub_sync_db_sync_form_ajax_callback($form, $form_state) {
+  return $form;
+}

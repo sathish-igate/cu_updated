@@ -1,0 +1,246 @@
+<?php
+/**
+ * @file
+ * Code for the Event Countdown feature.
+ */
+
+include_once 'event_countdown.features.inc';
+
+
+/**
+ * Implements hook_menu().
+ */
+function event_countdown_menu() {
+  $items = array();
+
+  $items['admin/config/media/event_countdown'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Event Countdown',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('event_countdown_configuration_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function event_countdown_block_info() {
+  $blocks = array();
+
+  $blocks['birthday_block'] = array(
+    'info' => t('Birthday Block'),
+  );
+  $blocks['holiday_party_block'] = array(
+    'info' => t('Holiday Party Block'),
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function event_countdown_block_view($delta) {
+  $block = array();
+
+  switch ($delta) {
+    case 'birthday_block':
+      $nid = variable_get('event_countdown_birthday_nid', -1);
+      if ($nid > 0) {
+        $node_view = node_view(node_load($nid));
+        $block['content'] = drupal_render($node_view);
+      }
+      break;
+
+    case 'holiday_party_block':
+      $nid = variable_get('event_countdown_holiday_party_nid', -1);
+      if ($nid > 0) {
+        $node_view = node_view(node_load($nid));
+        $block['content'] = drupal_render($node_view);
+      }
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * Form builder for the "configuration" page.
+ */
+function event_countdown_configuration_form($form, &$form_state) {
+  $nid_birthday = variable_get('event_countdown_birthday_nid', -1);
+  $nid_holiday_party = variable_get('event_countdown_holiday_party_nid', -1);
+
+  if ($nid_birthday > 0 && $nid_holiday_party > 0) {
+    $form['create_timer_events_description'] = array(
+      '#markup' => '<p>' . t('The Event Countdown sample nodes have been created.') . '</p>',
+    );
+  }
+  else {
+    $form['create_timer_events_description'] = array(
+      '#markup' => '<p>' . t('Create a couple of Event Countdown sample nodes.') . '</p>',
+    );
+
+    $form['create_timer_events_submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Create'),
+    );
+
+    $form['#submit'][] = 'event_countdown_form_submit';
+  }
+
+  return $form;
+}
+
+/**
+ * Form submit handler for event_countdown_configuration_form().
+ *
+ * @see event_countdown_configuration_form()
+ */
+function event_countdown_form_submit(&$form, &$form_state) {
+  // Create the birthday countdown event.
+  $node = new stdClass();
+  $node->type = 'event_countdown';
+  $node->title = 'Birthday Event';
+  $node->language = LANGUAGE_NONE;
+  $node->promoted = 0;
+  node_object_prepare($node);
+  $node->uid = 1;
+
+  $node->field_active_event[$node->language][0]['url'] = 'http://www.amazon.com/s/ref=nb_sb_ss_c_0_8/190-0002947-5703141?url=search-alias%3Dtoys-and-games&field-keywords=birthday%20party%20supplies&sprefix=birthday%2Caps%2C168';
+  $node->field_expiry_event[$node->language][0]['url'] = 'http://www.nbc.com';
+
+  $node = node_submit($node);
+  node_save($node);
+  variable_set('event_countdown_birthday_nid', $node->nid);
+
+  // Create the holiday countdown event.
+  $node = new stdClass();
+  $node->type = 'event_countdown';
+  $node->title = 'Holiday Party Event';
+  $node->language = LANGUAGE_NONE;
+  $node->promoted = 0;
+  node_object_prepare($node);
+  $node->uid = 1;
+
+  $node->field_active_event[$node->language][0]['url'] = 'http://www.amazon.com/s/ref=nb_sb_ss_i_0_13?url=search-alias%3Daps&field-keywords=holiday+gifts&sprefix=holiday+gifts%2Caps%2C123&rh=i%3Aaps%2Ck%3Aholiday+gifts';
+  $node->field_expiry_event[$node->language][0]['url'] = 'http://www.nbc.com';
+
+  $node = node_submit($node);
+  node_save($node);
+  variable_set('event_countdown_holiday_party_nid', $node->nid);
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function event_countdown_node_view($node, $view_node, $langcode) {
+  if ($node->type == 'event_countdown') {
+    $node->content['#theme'] = 'event_countdown';
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function event_countdown_preprocess_event_countdown(&$variables) {
+  $js_path = drupal_get_path('module', 'event_countdown') . '/js/event_countdown.js';
+  drupal_add_js($js_path, array('scope' => 'footer'));
+  drupal_add_css(drupal_get_path('module', 'event_countdown') . '/css/event_countdown.css');
+}
+
+/**
+ * Implements hook_theme().
+ */
+function event_countdown_theme($existing, $type, $theme, $path) {
+  return array(
+    'event_countdown' => array(
+      'variables' => array(
+        'node' => NULL,
+      ),
+    ),
+  );
+}
+
+/**
+ * The theme function for an Event Countdown node.
+ */
+function theme_event_countdown($variables) {
+  $node = $variables['node'];
+  $build = node_view($node);
+
+  $id = 'event-countdown-' . $node->nid;
+  $classes = array('jquery-countdown', 'event-countdown');
+
+  $timer_rendered = '';
+  if (isset($build['field_event_timer'])) {
+    $timer = $build['field_event_timer'];
+    $timer_rendered = render($timer);
+  }
+
+  $active_bg = '';
+  if (isset($build['field_active_background_color'][0]['#markup'])) {
+    $active_bg = $build['field_active_background_color'][0]['#markup'];
+    if (!empty($active_bg)) {
+      $active_bg = ' style="background-color:' . $active_bg . ';"';
+    }
+  }
+
+  $expiry_bg = '';
+  if (isset($build['field_expiry_background_color'][0]['#markup'])) {
+    $expiry_bg = $build['field_expiry_background_color'][0]['#markup'];
+    if (!empty($expiry_bg)) {
+      $expiry_bg = ' style="background-color:' . $expiry_bg . ';"';
+    }
+  }
+
+  $active_link_rendered = '';
+  if (isset($build['field_active_event'])) {
+    $active_link = $build['field_active_event'];
+    $active_link_rendered = render($active_link);
+
+    if (isset($build['field_active_event_image'])) {
+      $active_image = $build['field_active_event_image'];
+      $active_image_rendered = render($active_image);
+
+      if (!empty($active_image_rendered)) {
+        $active_link_rendered = str_replace('</a', $active_image_rendered . '</a', $active_link_rendered);
+      }
+    }
+  }
+
+  $expiry_link_rendered = '';
+  if (isset($build['field_expiry_event'])) {
+    $expiry_link = $build['field_expiry_event'];
+    $expiry_link_rendered = render($expiry_link);
+
+    if (isset($build['field_expiry_event_image'])) {
+      $expiry_image = $build['field_expiry_event_image'];
+      $expiry_image_rendered = render($expiry_image);
+
+      if (!empty($expiry_image_rendered)) {
+        $expiry_link_rendered = str_replace('</a', $expiry_image_rendered . '</a', $expiry_link_rendered);
+      }
+    }
+  }
+
+  $output = '<div id="' . $id . '" class="' . implode(' ', $classes) . '">';
+  $output .= '<div class="content">';
+  $output .= '<h3>' . $node->title . '</h3>';
+  $output .= $timer_rendered;
+
+  $output .= '<div class="event-countdown-active">';
+  $output .= '<div' . $active_bg . '>' . $active_link_rendered . '</div>';
+  $output .= '</div>';
+
+  $output .= '<div class="event-countdown-expiry">';
+  $output .= '<div' . $expiry_bg . '>' . $expiry_link_rendered . '</div>';
+  $output .= '</div>';
+  $output .= '</div>';
+  $output .= '</div>';
+
+  return $output;
+}

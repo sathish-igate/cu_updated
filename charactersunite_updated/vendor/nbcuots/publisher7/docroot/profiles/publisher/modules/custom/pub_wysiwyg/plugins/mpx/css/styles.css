@@ -1,0 +1,7 @@
+.mpx-video {
+  display: block;
+  width: 55px;
+  height: 23px;
+  background: url(../images/icon_2.png) center center no-repeat;
+  border: 1px solid black;
+}

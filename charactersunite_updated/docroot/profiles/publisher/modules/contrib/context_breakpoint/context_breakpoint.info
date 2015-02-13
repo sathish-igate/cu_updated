@@ -1,0 +1,8 @@
+name = Context Breakpoint
+description = Extends context with a breakpoint condition.
+dependencies[] = context
+dependencies[] = breakpoints
+core = 7.x
+files[] = context_breakpoint.module
+files[] = plugins/context_condition_breakpoint.inc
+scripts[] = context_breakpoint.js

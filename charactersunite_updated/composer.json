@@ -1,0 +1,24 @@
+
+{
+    "name": "nbcuots/chractersunite_usa",
+    "description": "Characters Unite, USA Network’s award-winning public service program.",
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "http://nbcuots.github.io/satis/"
+        }
+    ],
+    "require": {
+        "composer/installers": "@dev",
+        "drush/drush": "6.4.0",
+        "nbcuots/publisher7": "7.50.0"
+    },
+    "scripts": {
+      "post-install-cmd": "vendor/nbcuots/publisher7/scripts/publisher-install",
+      "post-update-cmd": "vendor/nbcuots/publisher7/scripts/publisher-install"
+    },
+    "extra": {
+        "webroot-package": "nbcuots/publisher7",
+        "webroot-dir": "docroot"
+    }
+}

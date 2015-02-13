@@ -1,0 +1,31 @@
+<?php
+/**
+ * @file
+ * Install hooks for Event Countdown.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function event_countdown_install() {
+  variable_set('event_countdown_birthday_nid', -1);
+  variable_set('event_countdown_holiday_party_nid', -1);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function event_countdown_uninstall() {
+  $nid = variable_get('event_countdown_birthday_nid');
+  if ($nid !== -1) {
+    node_delete($nid);
+  }
+
+  $nid = variable_get('event_countdown_holiday_party_nid');
+  if ($nid !== -1) {
+    node_delete($nid);
+  }
+
+  variable_del('event_countdown_birthday_nid');
+  variable_del('event_countdown_holiday_party_nid');
+}

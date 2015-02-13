@@ -1,0 +1,9 @@
+
+.fieldset-wrapper .form-type-checkbox {
+  margin-bottom: 5px;
+}
+
+.fieldset-wrapper .form-type-select {
+  display: block;
+  padding: 0 0 9px 15px;
+}

@@ -1,0 +1,71 @@
+<?php
+
+/**
+ * @file
+ * Primary hook implementations for Metatag: Twitter Cards (See It).
+ */
+
+/**
+ * Implements hook_metatag_info().
+ */
+function metatag_twitter_cards_see_it_metatag_info() {
+  $info['tags']['twitter:seeit:showid'] = array(
+    'label' => t('See It: ShowID/EpisodeID'),
+    'description' => t("ShowID or EpisodeID is the ID for the show in the IDSpace you use. Required if card type is <em>See It</em>. e.g. 9222635058369246112
+"),
+    'class' => 'DrupalTextMetaTag',
+    'group' => 'twitter-cards',
+    'element' => array(
+      '#theme' => 'metatag_twitter_cards',
+    ),
+  );
+
+  $info['tags']['twitter:seeit:idspace'] = array(
+    'label' => t('See It: IDSpace'),
+    'description' => t("IDSpace can either be t for TMS, r for ROVI or s for See It. Required if card type is <em>See It</em>."),
+    'class' => 'DrupalTextMetaTag',
+    'group' => 'twitter-cards',
+    'form' => array(
+      '#type' => 'select',
+      '#options' => array(
+        't' => t('TMS (t)'),
+        'r' => t('ROVI (r)'),
+        's' => t('See It (s)'),
+      ),
+      '#empty_option' => t('- None -'),
+    ),
+    'element' => array(
+      '#theme' => 'metatag_twitter_cards',
+    ),
+  );
+
+  $info['tags']['twitter:seeit:campaignid'] = array(
+    'label' => t('See It: Campaign ID'),
+    'description' => t("This is used so we can give you stats on how many action subscribers took for each of your marketing campaigns. e.g. 'fall'"),
+    'class' => 'DrupalTextMetaTag',
+    'group' => 'twitter-cards',
+    'element' => array(
+      '#theme' => 'metatag_twitter_cards',
+    ),
+  );
+
+  $info['tags']['twitter:seeit:assetid'] = array(
+    'label' => t('See It: Asset ID'),
+    'description' => t("This is used so we can give you stats on how many action subscribers took for a particular marketing asset. e.g. 'mainpage' or '1257'"),
+    'class' => 'DrupalTextMetaTag',
+    'group' => 'twitter-cards',
+    'element' => array(
+      '#theme' => 'metatag_twitter_cards',
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_metatag_info_alter().
+ */
+function metatag_twitter_cards_see_it_metatag_info_alter(&$info) {
+  $info['tags']['twitter:card']['form']['#options']['seeit'] = 'See It';
+  $info['tags']['twitter:card']['description'] .= t(" The <em>See It</em> card requires the 'ShowID' and 'IDSpace'.");
+}

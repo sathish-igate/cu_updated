@@ -1,0 +1,10 @@
+name = Pub SPS (Site Preview System)
+description = General modifications to compliment SPS (Site Preview System).
+package = Publisher
+core = 7.x
+version = 7.x-1.0
+
+dependencies[] = iib
+dependencies[] = sps
+
+files[] = tests/pubSPSPurgeTest.test

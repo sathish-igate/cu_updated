@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * @file
+ * Install file for Publisher Workbench.
+ */
+
+/**
+ * Implements hook_instal().
+ */
+function pub_workbench_install() {
+  // Move Scheduler content from State Flow Scheduler
+  // to Revision scheduler.
+  if (module_exists('state_flow_schedule')) {
+    $query = db_select('state_flow_schedule', 's');
+    $query->fields('s', array('nid', 'vid', 'date'));
+    $result = $query->execute();
+    foreach ($result as $record) {
+      $operation = new stdClass();
+      $operation->id = NULL;
+      $operation->entity_type = 'node';
+      $operation->entity_id = $record->nid;
+      $operation->revision_id = $record->vid;
+      $operation->operation = 'workbench_moderation_to_published';
+      $operation->time_scheduled = $record->date;
+      $operation->time_queued = 0;
+      $operation->time_executed = 0;
+      revision_scheduler_operation_save($operation);
+    }
+  }
+}
+
+/**
+ * Enable the File Entity Revisions module as a dependency for Pub Workbench.
+ */
+function pub_workbench_update_7100() {
+  module_enable(array('file_entity_revisions'));
+}

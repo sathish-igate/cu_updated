@@ -1,0 +1,217 @@
+<?php
+/**
+ * @file
+ * Install file for the Pub Ads feature.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function pub_ads_install() {
+  $conf_path_split = explode('/', conf_path());
+  $site_shortname = array_pop($conf_path_split);
+
+  // Configure Pub Ads for NBCU. Since we cannot know if the site will be using
+  // DART or DFP we preconfigure both by setting global variables.
+  $dart_global_prefix = variable_get('dart_global_prefix', '');
+  $dfp_network_id = variable_get('dfp_network_id', '');
+  if (empty($dart_global_prefix)) {
+    variable_set('dart_global_prefix', 'nbcu');
+    variable_set('dart_global_site', $site_shortname);
+    variable_set('dart_global_zone', 'default');
+    variable_set('dart_global_slug', 'Advertisement');
+    variable_set('dart_noscript', '1');
+    variable_set('dart_include_taxonomy_terms', '1');
+    variable_set('dart_enable_ad_categories', '1');
+    variable_set('dart_term_key', 'term');
+    variable_set('dart_term_formatter', '_dart_term_formatter_truncated');
+    variable_set('dart_special_key_vals', array(
+      'tile' => 'tile',
+      'ord' => 'ord',
+    ));
+    variable_set('dart_special_tile_init', '1');
+    variable_set('dart_js', 'if (typeof eTandomAd == "undefined") eTandomAd = "none";');
+    variable_set('dart_test_prefix', 'nbcu');
+    variable_set('dart_test_site', $site_shortname);
+    variable_set('dart_test_zone', 'default');
+    variable_set('dart_key_vals', array(
+      array(
+        'key' => 'site',
+        'val' => $site_shortname,
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => 'sect',
+        'val' => '[current-page:url:unaliased:args:value:0]',
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => 'sub',
+        'val' => '[current-page:url:unaliased:args:value:1]',
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => '!c',
+        'val' => $site_shortname,
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => '!c',
+        'val' => '[current-page:url:unaliased:args:value:0]',
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => '!c',
+        'val' => '[current-page:url:unaliased:args:value:1]',
+        'eval' => FALSE,
+      ),
+      array(
+        'key' => 'tandomad',
+        'val' => 'eTandomAd',
+        'eval' => TRUE,
+      ),
+      array(
+        'key' => '<none>',
+        'val' => "top.__nbcudigitaladops_dtparams || ''",
+        'eval' => TRUE,
+      ),
+    ));
+
+    pub_ads_update_7002();
+  }
+  elseif (empty($dfp_network_id)) {
+    variable_set('dfp_network_id', 'nbcu');
+    variable_set('dfp_default_adunit', '[current-page:url:args:value:0]/[current-page:url:args:value:1]/[dfp_tag:slot]');
+    variable_set('dfp_async_rendering', 1);
+    variable_set('dfp_single_request', 1);
+    variable_set('dfp_default_slug', 'Advertisement');
+    variable_set('dfp_collapse_empty_divs', 1);
+    variable_set('dfp_targeting', array(
+      array(
+        'target' => 'site',
+        'value' => $site_shortname,
+      ),
+      array(
+        'target' => 'sect',
+        'value' => '[current-page:url:unaliased:args:value:0]',
+      ),
+      array(
+        'target' => 'sub',
+        'value' => '[current-page:url:unaliased:args:value:1]',
+      ),
+      array(
+        'target' => '!c',
+        'value' => $site_shortname,
+      ),
+      array(
+        'target' => '!c',
+        'value' => '[current-page:url:unaliased:args:value:0]',
+      ),
+      array(
+        'target' => '!c',
+        'value' => '[current-page:url:unaliased:args:value:1]',
+      ),
+    ));
+  }
+  else {
+    $t = get_t();
+    drupal_set_message($t('The Pub Ads module could not preset the DART configuration nor the DFP configuration for your site. Please contact NBCU Ad Ops to ensure that your settings are correct.')
+    );
+    watchdog('pub_ads', $t('The Pub Ads module could not preset the DART configuration nor the DFP configuration for your site. Please contact NBCU Ad Ops to ensure that your settings are correct.')
+    );
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_ads_uninstall() {
+  variable_del('pub_ads_video_companion_ad_1');
+  variable_del('pub_ads_video_companion_ad_2');
+  variable_del('pub_ads_video_companion_ad_3');
+  variable_del('pub_ads_video_companion_ad_4');
+  variable_del('pub_ads_video_companion_ad_5');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function pub_ads_schema() {
+  $t = get_t();
+
+  $schema['pub_ads_paths'] = array(
+    'description' => $t('Table storing paths definitions for pub ads.'),
+    'export' => array(
+      'key' => 'machine_name',
+      'key name' => 'Machine name',
+      'primary key' => 'machine_name',
+      'identifier' => 'adpath',
+      'default hook' => 'default_pub_ads_file_path',
+      'api' => array(
+        'owner' => 'pub_ads',
+        'api' => 'pub_ads_file_paths_default',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+    ),
+    'fields' => array(
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The path unique name.",
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'description' => 'Unique ID for this object. Used to identify it programmatically.',
+      ),
+      'path' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'description' => 'Path for the responsose.',
+      ),
+      'file_type' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'description' => 'Content Type of the responsose.',
+      ),
+      'content' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'description' => 'Content responsose.',
+      ),
+    ),
+    'unique keys' => array(
+      'machine_name' => array('machine_name'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Add the pub_ads Schema.
+ */
+function pub_ads_update_7001(&$sandbox) {
+  drupal_install_schema('pub_ads');
+}
+
+/**
+ * Set default values for the video companion ads.
+ */
+function pub_ads_update_7002() {
+  variable_set('pub_ads_video_companion_ad_1', 'ad_728x90_1');
+  variable_set('pub_ads_video_companion_ad_2', 'ad_300x60_1');
+  variable_set('pub_ads_video_companion_ad_3', 'ad_300x250_1');
+  variable_set('pub_ads_video_companion_ad_4', '');
+  variable_set('pub_ads_video_companion_ad_5', '');
+}
+
+/**
+ * Enabling the pixelman after moving that functionality to its own module.
+ */
+function pub_ads_update_7003() {
+  module_enable(array('pixelman'));
+}

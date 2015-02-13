@@ -1,0 +1,61 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Person feature.
+ */
+
+include_once 'pub_person.features.inc';
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_person_form_person_node_form_alter(&$form, &$form_state, $form_id) {
+  // Move additional information and perons's information tabs to the top of
+  // the vertical tabs.
+  $form['#groups']['group_additional_information']->weight = -101;
+  $form['#groups']['group_persons_information']->weight = -102;
+
+  // Loop through legal name fields and set their visibility to be toggled based
+  // on whether or not the "Different Legal Name" checkbox is checked.
+  $legal_name_fields = array(
+    'field_legal_name_prefix',
+    'field_legal_name_first_name',
+    'field_legal_name_middle_name',
+    'field_legal_name_last_name',
+    'field_legal_name_suffix',
+  );
+  $lang = $form['language']['#value'];
+  foreach ($legal_name_fields as $field_name) {
+    $form[$field_name]['#states']['visible'] = array(
+      ':input[name="field_different_legal_name[' . $lang . ']"]' => array('checked' => TRUE)
+    );
+  }
+
+  // Add form validation function
+  $form['#validate'][] = 'pub_person_node_form_validate';
+}
+
+/**
+ * Validation function for the Person node form.
+ * This will ensure that either a first name or last name is entered.
+ * It will also ensure that a legal first name or last name is entered if the
+ * "Different Legal Name" checkbox is checked.
+ */
+function pub_person_node_form_validate($form, &$form_state) {
+  $lang = $form['language']['#value'];
+  
+  // If both first name and last name are empty, set an error on both fields.
+  if (empty($form_state['values']['field_person_first_name'][$lang][0]['value']) && empty($form_state['values']['field_person_last_name'][$lang][0]['value'])) {
+    form_set_error('field_person_first_name', t('You must enter at least a first name or last name for this person.'));
+    form_set_error('field_person_last_name', '');
+  }
+
+  // If "Different Legal Name" is checked, and neither legal first name nor
+  // legal last name is entered, set an error on both fields.
+  if (!empty($form_state['values']['field_different_legal_name'][$lang][0]['value'])) {
+    if (empty($form_state['values']['field_legal_name_first_name'][$lang][0]['value']) && empty($form_state['values']['field_legal_name_last_name'][$lang][0]['value'])) {
+      form_set_error('field_legal_name_first_name', t('If this person has a different legal name, then you must enter at least a legal first name or legal last name for this person.'));
+      form_set_error('field_legal_name_last_name', '');
+    }
+  }
+}

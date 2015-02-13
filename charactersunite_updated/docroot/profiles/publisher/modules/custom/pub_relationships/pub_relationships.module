@@ -1,0 +1,41 @@
+<?php
+
+/**
+ * @file
+ *
+ * Relationships module for the Publisher 7.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function pub_relationships_menu() {
+  $items = array();
+
+  // Pub relationships settings.
+  $items['admin/config/content/relations'] = array(
+    'title' => 'Relationships Settings',
+    'description' => 'Allows you to select which content type publisher relationships should be attached to.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_relationships_config'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'pub_relationships.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * We don't do this is a hook_form_alter that way
+ * The other sub module can add it if needed.
+ */
+function pub_relation_add_verticle_add_if_empty(&$form) {
+  if (empty($form['pub_relationships'])) {
+    $form['pub_relationships'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Relationships'),
+      '#group' => 'additional_settings',
+      '#weight' => -10,
+    );
+  }
+}

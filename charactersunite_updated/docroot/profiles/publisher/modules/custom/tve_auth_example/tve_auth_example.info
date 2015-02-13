@@ -1,0 +1,8 @@
+name = TVE Auth Example
+description = Simple integration with TVE Auth API.
+core = 7.x
+package = NBCU TVE
+version = 7.x-1.0
+
+dependencies[] = tve_adobe_pass
+dependencies[] = tve_mvpd

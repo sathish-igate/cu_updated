@@ -1,0 +1,14 @@
+name = State Machine
+description = Provides a Finite State Machine for Drupal entities.
+core = 7.x
+package = "State Machine"
+version = "7.x-3.x"
+files[] = inc/base.inc
+files[] = state_machine.api.php
+
+; Information added by Drupal.org packaging script on 2014-07-30
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "state_machine"
+datestamp = "1406740729"
+

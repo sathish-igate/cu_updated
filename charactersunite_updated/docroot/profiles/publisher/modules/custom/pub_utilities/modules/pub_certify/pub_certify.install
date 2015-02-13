@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function pub_certify_schema() {
+  $schema['pub_certify_log'] = array(
+    'description' => 'Creates a log of when code is certified and by whom.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "The users's {user}.uid.",
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The certification timestamp.',
+      ),
+      'repository' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The repository containing the code being certified.',
+      ),
+      'branch' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The being certified.',
+      ),
+    ),
+    'primary key' => array('timestamp', 'repository', 'branch'),
+    'foreign keys' => array(
+      'uid' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+    'indexes' => array(
+      'uid' => array('uid'),
+      'repository' => array('repository'),
+      'branch' => array('branch'),
+    ),
+  );
+
+  return $schema;
+}

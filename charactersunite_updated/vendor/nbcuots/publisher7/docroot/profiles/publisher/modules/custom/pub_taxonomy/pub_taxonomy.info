@@ -1,0 +1,14 @@
+name = Pub Taxonomy
+description = Provides basic Taxonomies that are used in Publisher.
+core = 7.x
+package = Publisher
+php = 5.2.4
+version = 7.x-1.0
+project = pub_taxonomy
+dependencies[] = features
+dependencies[] = taxonomy
+features[features_api][] = api:1
+features[taxonomy][] = categories
+features[taxonomy][] = genre
+features[taxonomy][] = role
+features[taxonomy][] = tags

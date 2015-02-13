@@ -1,0 +1,16 @@
+name = Feature Publisher7 MPX File Types
+core = 7.x
+package = Publisher
+php = 5.2.4
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = file_entity
+dependencies[] = text
+features[ctools][] = file_entity:file_type:1
+features[features_api][] = api:2
+features[field_base][] = field_mpx_media_categories
+features[field_base][] = field_mpx_released_file_pids
+features[field_instance][] = file-mpx_video-field_mpx_media_categories
+features[field_instance][] = file-mpx_video-field_mpx_released_file_pids
+features[file_type][] = mpx_player
+features[file_type][] = mpx_video

@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @File
+ * Example module that demonstrates the pub_mpx API.
+ */
+
+/**
+ * Implements hook_pub_mpx_player_id_rulesets_info().
+ *
+ * Define one or more player_id rulesets to set the player on import. Specify
+ * rulesets as a multi-dimensional array in the following format.
+ */
+function pub_mpx_example_pub_mpx_player_id_rulesets_info() {
+  $rulesets = array(
+    array(
+      'fields' => array(
+        'entitlement' => 'free',
+        'fullEpisode' => FALSE,
+      ),
+      // Set the player for the video with the key 'guid'. This is the
+      // 'Reference ID' in the history section of the player at
+      // http://mpx.theplatform.com.
+
+      // thePlatform - VOD Global Player
+      'guid' => 'GClP1BxPBHo87Bi5oymyrI4xnBqwaL9Zz',
+    ),
+    array(
+      'fields' => array(
+        'entitlement' => 'auth',
+        'fullEpisode' => TRUE,
+      ),
+      // [DEV] - MVPD Live Player (tP Support)
+      'guid' => 'gd_DUKrut8dURN8bzZaA7y0BDtbJG_6sz',
+    ),
+    array(
+      'fields' => array(
+        // Use media$name to specify a category. Currently case-sensitive.
+        'media$name' => 'Live',
+      ),
+      // thePlatform - Linear Global Player
+      'guid' => 'Ypj4ZTiYGkwy5iCRdLQMgzX1CyhnqYHjz',
+    ),
+  );
+
+  return $rulesets;
+}
+
+/**
+ * Example of how to override the guid of previously defined rules.
+ *
+ * Implements hook_pub_mpx_player_rules_info_alter().
+ *
+ * @params array $rules
+ *   A multidimensial array.
+ *
+ * @return array
+ */
+function pub_mpx_example_pub_mpx_player_id_rulesets_info_alter(&$rulesets) {
+  if(is_array($rulesets) && !empty($rulesets)) {
+    foreach ($rulesets as $ruleset) {
+      $ruleset['guid'] = 'kljsflksdjflkjlkjsdf0893409384';
+    }
+  }
+}
+
+/**
+ * Sample code for altering mpx feed URLs - fitering by category.
+ */
+function pub_mpx_example_media_theplatform_mpx_feed_request_alter(&$url, &$options) {
+
+  $nbc_import_account = 'NBC.com Stage';
+  $nbc_import_account_id = db_select('mpx_accounts', 'ma')
+    ->fields('ma', array('account_id'))
+    ->condition('import_account', rawurlencode($nbc_import_account), 'LIKE')
+    ->execute()
+    ->fetchField();
+  $nbc_filter_by_category = TRUE;
+  $nbc_filtering_category = 'Series/The Tonight Show';
+
+  if ($nbc_import_account_id && $nbc_filter_by_category
+      && strpos($url, '//data.media.theplatform.com/media/data/Media') !== FALSE
+      && strpos($url, 'byOwnerId=' . $nbc_import_account_id) !== FALSE) {
+
+    $url .= '&byCategories='. rawurlencode($nbc_filtering_category);
+  }
+
+
+  $dbtv_import_account = 'DB TV';
+  $dbtv_import_account_id = db_select('mpx_accounts', 'ma')
+    ->fields('ma', array('account_id'))
+    ->condition('import_account', rawurlencode($dbtv_import_account), 'LIKE')
+    ->execute()
+    ->fetchField();
+  $dbtv_filter_by_category = TRUE;
+  $dbtv_filtering_category = 'Series/Burn Notice';
+
+  if ($dbtv_import_account_id && $dbtv_filter_by_category
+      && strpos($url, '//data.media.theplatform.com/media/data/Media') !== FALSE
+      && strpos($url, 'byOwnerId=' . $dbtv_import_account_id) !== FALSE) {
+
+    $url .= '&byCategories='. rawurlencode($dbtv_filtering_category);
+  }
+}
+
+
+
+
+
+

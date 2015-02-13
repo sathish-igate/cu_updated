@@ -1,0 +1,6 @@
+name = Pub mpx Example
+description = "Example module that demonstrates the pub_mpx API."
+core = 7.x
+version = 7.x-2.0
+package = Publisher
+dependencies[] = pub_mpx

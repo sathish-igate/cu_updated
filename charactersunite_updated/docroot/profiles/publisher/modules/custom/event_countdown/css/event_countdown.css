@@ -1,0 +1,27 @@
+
+.jquery-countdown {
+  margin-bottom: 8px;
+}
+.jquery-countdown.hasCountdown {
+  border: none;
+  background-color: transparent;
+}
+.jquery-countdown .countdown_amount {
+  font-size: 100%;
+}
+.jquery-countdown .countdown_section {
+  width: 24%;
+}
+
+.jquery-countdown .event-countdown-active {
+  display: block;
+}
+.jquery-countdown .event-countdown-expiry {
+  display: none;
+}
+.jquery-countdown.countdown-timer-terminated .event-countdown-active {
+  display: none;
+}
+.jquery-countdown.countdown-timer-terminated .event-countdown-expiry {
+  display: block;
+}

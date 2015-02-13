@@ -1,0 +1,44 @@
+.ctools-dropbutton-processed {
+  position: relative;
+}
+
+#autocomplete div.view-mode-entityreference_live_preview {
+  display: inline-block;
+}
+
+.view-content .media--status--Published .views-field-state div,
+.view-content .media--status--Unpublished .views-field-state div,
+.view-content .media--status--Draft .views-field-state div,
+.view-content .media--status--Review .views-field-state div {
+  background-repeat: no-repeat;
+  background-position: 0 2px;
+  background-size: 16px;
+  padding: 0 0 0 19px;
+}
+.view-content .media--status--Published .views-field-state {
+  background: #B7DEA7;
+}
+.view-content .media--status--Published .views-field-state div {
+  background-image: url( ../images/ico_published.png );
+}
+.view-content .media--status--Unpublished .views-field-state {
+  background: #FDB9BB;
+}
+.view-content .media--status--Unpublished .views-field-state div {
+  background-image: url( ../images/ico_unpublished.png );
+}
+.view-content .media--status--Draft .views-field-state {
+  background: #729ACE;
+  color: #ffffff;
+}
+.view-content .media--status--Draft .views-field-state div {
+  background-image: url( ../images/ico_draft.png );
+}
+
+/* Padding for Views' date picker fields */
+#views-exposed-form-content-content .form-type-date-popup .form-item-changed-date,
+#views-exposed-form-media-galleries-media-galleries .form-type-date-popup .form-item-changed-date,
+#views-exposed-form-content-files-page .form-type-date-popup .form-item-timestamp-date,
+#views-exposed-form-content-revisions-page .form-type-date-popup .form-item-timestamp-date {
+  padding-top: 9px;
+}

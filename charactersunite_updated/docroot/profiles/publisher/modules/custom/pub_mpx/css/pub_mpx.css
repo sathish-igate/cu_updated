@@ -1,0 +1,29 @@
+.view-content-files .mpx-media--status--Published .views-field-status div,
+.view-content-files .mpx-media--status--Unpublished .views-field-status div,
+.view-content-files .mpx-media--status--Expired .views-field-status div {
+  background-repeat: no-repeat;
+  background-position: 0 2px;
+  background-size: 16px;
+  padding: 0 0 0 19px;
+}
+/* STATUS: PUBLISHED */
+.view-content-files .mpx-media--status--Published .views-field-status {
+  background: #B7DEA7;
+}
+.view-content-files .mpx-media--status--Published .views-field-status div {
+  background-image: url( ../images/ico_published.png );
+}
+/* STATUS: UNPUBLISHED, EXPIRED */
+.view-content-files .mpx-media--status--Unpublished .views-field-status,
+.view-content-files .mpx-media--status--Expired .views-field-status {
+  background: #FDB9BB;
+}
+.view-content-files .mpx-media--status--Unpublished .views-field-status div,
+.view-content-files .mpx-media--status--Expired .views-field-status div {
+  background-image: url( ../images/ico_unpublished.png );
+}
+
+/* Padding for Views' date picker fields */
+#views-exposed-form-content-files-mpx-files-page .form-type-date-popup .form-item-timestamp-date {
+  padding-top: 9px;
+}

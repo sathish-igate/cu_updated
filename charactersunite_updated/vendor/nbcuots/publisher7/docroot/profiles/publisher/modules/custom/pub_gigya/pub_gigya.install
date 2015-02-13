@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * Implements hook_enable().
+ * 
+ * We need to set the weight of the pub_gigya module so it runs after the
+ * comment module, this way the hook_node_view() is gauranteed to run.
+ */
+function pub_gigya_enable() {
+  $result = db_query("SELECT weight FROM {system} WHERE name = 'comment'")
+    ->fetchField();
+
+  db_update('system')
+    ->fields(array('weight' => $result + 1))
+    ->condition('name', 'pub_gigya')
+    ->execute();
+}

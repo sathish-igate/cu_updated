@@ -1,0 +1,139 @@
+<?php
+/**
+ * @file
+ * The install file for program_guide.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function program_guide_uninstall() {
+  variable_del('program_guide_data_url');
+  variable_del('program_guide_update_interval');
+  variable_del('program_guide_delete_after_interval');
+}
+
+
+/**
+ * Implements hook_schema().
+ */
+function program_guide_schema() {
+  $schema['programs'] = array(
+    'description' => 'Stores program data provided by ROVI via MPX.',
+    'fields' => array(
+      'guid' => array(
+        'description' => 'The primary identifier for this program airing at the given time.',
+        'type' => 'varchar',
+        'length' => '32',
+        'default' => '',
+        'not null' => TRUE,
+      ),
+      'program_guid' => array(
+        'description' => 'The primary identifier for this program regardless of when it airs.',
+        'type' => 'varchar',
+        'length' => '32',
+        'default' => '',
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'description' => "The name of this specific program. (Ex. Episode title, movie title, etc.)",
+      ),
+      'parent_title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+        'description' => "The program parent's name. (Ex. Law & Order: SVU)",
+      ),
+      'start_time' => array(
+        'description' => 'The Unix timestamp when the program will begin (GMT).',
+        'type' => 'int',
+        'default' => 0,
+      ),
+      'end_time' => array(
+        'description' => 'The Unix timestamp when the program will end (GMT).',
+        'type' => 'int',
+        'default' => 0,
+      ),
+      'run_time' => array(
+        'description' => 'The duration of the program in milliseconds.',
+        'type' => 'int',
+        'default' => 0,
+      ),
+      'series_episode_number' => array(
+        'description' => 'The episode number relative to the entire series.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'season_episode_number' => array(
+        'description' => 'The episode number relative to the season to which it belongs.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'season_number' => array(
+        'description' => 'The season number to which this program belongs.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp when the program entity was created.',
+        'type' => 'int',
+        'default' => 0,
+      ),
+      'raw' => array(
+        'type' => 'blob',
+        'description' => "The raw JSON data for this program.",
+        'size' => 'big',
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('guid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function program_guide_requirements($phase) {
+  $t = get_t();
+  $requirements = array();
+
+  switch ($phase) {
+    case 'runtime':
+      $program_guide_data = variable_get('program_guide_data_url', '');
+      $requirements['program_guide'] = array(
+        'title' => $t('Program Guide Data URL'),
+        'value' => !empty($program_guide_data) ? $program_guide_data : $t('No program guide data url has been set.'),
+        'severity' => !empty($program_guide_data) ? REQUIREMENT_INFO : REQUIREMENT_WARNING,
+        'description' => !empty($program_guide_data) ? $t('The program guide will not work until this value is set.') : '',
+      );
+      break;
+  }
+
+  return $requirements;
+}
+
+/**
+ * Convert the guid column from an int to a varchar to support strings.
+ */
+function program_guide_update_7000() {
+  db_change_field('programs', 'guid', 'guid', array(
+    'type' => 'varchar',
+    'length' => 32,
+    'not null' => TRUE,
+    'default' => '',
+  ));
+  db_change_field('programs', 'program_guid', 'program_guid', array(
+    'type' => 'varchar',
+    'length' => 32,
+    'not null' => TRUE,
+    'default' => '',
+  ));
+}

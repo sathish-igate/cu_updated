@@ -1,0 +1,231 @@
+<?php
+/**
+ * Tests the functionality of logo
+ */
+class logoTest extends DrupalWebTestCase {
+  /**
+   * Implementation of setUp()
+   */
+  function setUp() {
+    // $this->profile = 'pub_entertainment';
+
+    // Enable any modules required for the test.
+    parent::setUp('logo', 'date_popup', 'views');
+    // Create an admin user with permissions needed to run tests.
+    $this->admin_user = $this->drupalCreateUser(array('administer logo', 'access administration pages'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Create a $edit array to create a new logo object.
+   */
+  function logoEditValues() {
+    $logo = array(
+      'title' => $this->randomName(8),
+      'start[date]' => date('Y-m-d', time() + 60*60*24*rand(1,3)),
+      'start[time]' => date('h:i:s a'),
+      'end[date]' => date('Y-m-d', time() + 60*60*24*rand(4,30)),
+      'end[time]' => date('h:i:s a')
+    );
+
+    return $logo;
+  }
+
+  /**
+   * Implements createLogo().
+   */
+  function createLogo($edit = array()) {
+    $edit = empty($edit) ? $this->logoEditValues() : $edit;
+    $this->drupalPost('logo/add', $edit, t('Save'));
+    $this->assertText(t("@title", array("@title" => $edit['title'])), "Logo saved successfully.");
+    return $edit;
+  }
+
+  function activateNewLogo($delay = 0) {
+    $edit = $this->logoEditValues();
+
+    $edit['start[date]'] =  date('Y-m-d');
+    $edit['start[time]'] =  date('h:i:s a', (time() + $delay));
+
+    $edit['end[date]'] =  date('Y-m-d');
+    $edit['end[time]'] =  date('h:i:s a', time() + 60*60*2);
+
+    $image = current($this->drupalGetTestFiles('image'));
+    $edit['files[field_logo_und_0]'] = drupal_realpath($image->uri);
+
+    $logo = $this->createLogo($edit);
+
+    sleep($delay);
+    // Run the cron.
+    $this->cronRun();
+
+    // Check the logo is active on the front/home page correctly.
+    $this->drupalGet('<front>');
+    $this->assertPattern('|(image-test_)([0-9])+(.(png))|', t('Logo appeared on schedule correctly.'));
+  }
+}
+
+class logoCreateTest extends logoTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Create Logo'),
+      'description' => t('Tests for creating a logo.'),
+      'group' => t('Logo'),
+    );
+  }
+
+  function testCreateLogoForm() {
+    $edit = $this->logoEditValues();
+    $image = current($this->drupalGetTestFiles('image'));
+    $edit['files[field_logo_und_0]'] = drupal_realpath($image->uri);
+
+    // Start date should not occur in the past.
+    $edit['start[date]'] = date('Y-m-d', time() - 60*60*24*rand(1, 3));
+    $this->drupalPost('logo/add', $edit, t('Save'));
+    $this->assertText(t('Start date cannot occur in the past.'), "An error was correctly thrown when choosing a start date in the past.");
+
+
+    // Start date should not be later than end date.
+    $edit['start[date]'] = date('Y-m-d', time() + 60*60*24*rand(3, 5));
+    $edit['end[date]'] = date('Y-m-d', time() + 60*60*24*rand(1, 2));
+    $this->drupalPost('logo/add', $edit, t('Save'));
+    $this->assertText(t('The end date must occur after the start date.'), "An error was correctly thrown when choosing a start date after the end date.");
+
+    // Test that a logo cannot be scheduled at the same time as another logo.
+     $edit = $this->logoEditValues();
+    $image = current($this->drupalGetTestFiles('image'));
+    $edit['files[field_logo_und_0]'] = drupal_realpath($image->uri);
+    $edit['start[date]'] = date('Y-m-d', time() + 60*60*24);
+    $edit['end[date]'] = date('Y-m-d', time() + 60*60*24*rand(2, 3));
+    $this->createLogo($edit);
+
+    $edit['start[date]'] = date('Y-m-d', time() + 60*60*24*2);
+    $edit['end[date]'] = date('Y-m-d', time() + 60*60*24*rand(2, 3));
+    $this->drupalPost('logo/add', $edit, t('Save'));
+    $this->assertText(t('Another logo is already scheduled to be active during that time period.'), 'An error was correctly thrown when creating another logo with the dates already scheduled.');
+  }
+}
+
+
+class logoEditTest extends logoTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Edit Logo'),
+      'description' => t('Tests for Editing a logo.'),
+      'group' => t('Logo'),
+    );
+  }
+
+  function testEditLogo() {
+    // Create a logo.
+    $edit = $this->logoEditValues();
+
+    $image = current($this->drupalGetTestFiles('image'));
+    $edit['files[field_logo_und_0]'] = drupal_realpath($image->uri);
+
+
+    $logo = $this->createLogo($edit);
+
+    // Edit logo title.
+    $title = $this->randomName(8);
+    $this->drupalPost('logo/edit/1', array("title" => $title), t('Save'));
+    $this->assertText(t("@title", array("@title" => $title)), "Title of the logo was edited successfully.");
+  }
+}
+
+class logoDeleteTest extends logoTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Delete Logo'),
+      'description' => t('Tests for deleting a logo.'),
+      'group' => t('Logo'),
+    );
+  }
+
+  function testDeleteLogo() {
+    $edit = $this->logoEditValues();
+
+    $image = current($this->drupalGetTestFiles('image'));
+    $edit['files[field_logo_und_0]'] = drupal_realpath($image->uri);
+
+    $logo = $this->createLogo($edit);
+
+    // Test to delete a logo.
+    $this->drupalGet('logo/delete/1');
+    $this->drupalPost(NULL, NULL, t('Delete'));
+    $this->assertNoText(t("@title", array('@title' => $logo['title'])), "Logo was deleted successfully.");
+    $logo = logo_load(1);
+    $this->assertTrue(empty($logo), 'The Logo was deleted.');
+  }
+
+}
+
+class logoScheduleTest extends logoTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Schedule logo'),
+      'description' => t('Tests for schedule logo.'),
+      'group' => t('Logo'),
+    );
+  }
+
+  function testScheduleLogo() {
+    $delay = 3;
+    $this->activateNewLogo($delay);
+  }
+}
+
+class logoEditActiveTest extends logoTest {
+  /**
+   * Implements getInfo().
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('Edit Active Logo'),
+      'description' => t('Tests for editing a active logo.'),
+      'group' => t('Logo'),
+    );
+  }
+
+  function testEditActiveLogo() {
+    // Test the active logo by editing the logo start and end dates to later
+    // dates then check the active logo is turn off and displays the default
+    // logo.
+    $delay = 3;
+    $this->activateNewLogo($delay);
+
+    // Editing dates of the logo and test the active logo is edited correctly.
+    $start_date = date('Y-m-d', time() + 60*60*24*rand(1,3));
+    $start_time = date('h:i:s a');
+
+    $end_date = date('Y-m-d', time() + 60*60*24*rand(4,5));
+    $end_time = date('h:i:s a');
+
+    $title = $this->randomString(8);
+
+    $this->drupalPost('logo/edit/1', array('title' => $title, 'start[date]' => $start_date, 'start[time]' => $start_time, 'end[date]' => $end_date, 'end[time]' => $end_time), t('Save'));
+
+    $saved_startdate = date('M d Y h:i:s a', strtotime($start_date . " " . $start_time));
+
+    $this->assertText(t("@startdate", array('@startdate' => $saved_startdate)), "Edited active logo successfully.");
+
+    // Run the cron.
+    $this->cronRun();
+
+    $this->drupalGet('<front>');
+    $this->assertPattern('|logo.png|', t('Default logo was now corectly in active.'));
+
+  }
+}

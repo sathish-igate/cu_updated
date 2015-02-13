@@ -1,0 +1,9 @@
+name = Pub TV Relationships (deprecated)
+description = Publisher 7 TV Relationships
+core = 7.x
+version = 7.x-1.0
+package = Publisher
+dependencies[] = pub_tv
+dependencies[] = pub_relationships
+
+files[] = plugins/selection/PubRelationshipTVEntityReference_SelectionHandler.class.php

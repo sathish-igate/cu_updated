@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_media module.
+ */
+
+// Disable the media browser default view
+function pub_media_install() {
+  $views = variable_get('views_defaults', array());
+  $views['media_default'] = TRUE;
+  variable_set('views_defaults', $views);
+}
+
+function pub_media_update_7001() {
+  field_delete_field('field_media_items');
+  field_delete_field('field_cover_item');
+  field_purge_batch(999);
+  features_revert(array('pub_media' => array('field')));
+}
+
+/**
+ * Revert Feature on update.
+ */
+function pub_media_update_7002() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_media'));
+}
+
+/**
+ * Revert Feature on update so the Gigya sharebar field is added.
+ */
+function pub_media_update_7003() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_media'));
+}
+
+/**
+ * Revert Feature on update to rearrange fields and field groups.
+ */
+function pub_media_update_7004() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_media'));
+}
+
+/**
+ * Enable the media edit all module.
+ */
+function pub_media_update_7005() {
+  module_enable(array('media_edit_all'));
+}

@@ -1,0 +1,134 @@
+<?php
+
+/**
+ * @file
+ * Module file for media_edit_all.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function media_edit_all_menu() {
+  $items = array();
+
+  $items['admin/content/file/media-edit-all/%ctools_js/%media_bulk_upload_multi'] = array(
+    'title' => 'Edit multiple files',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('media_edit_all_file_page_edit_multiple', 4, 5),
+    'access arguments' => array('administer files'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Multi Files Ajax Upload Callback.
+ *
+ * @param array $form
+ *   The form array.
+ * @param array $form_state
+ *   The form_state array.
+ * @param string $ajax
+ *   The AJAX mode of this request.
+ * @param object[] $files
+ *   Array of file entities, magic loaded by media_bulk_upload_multi_load().
+ *
+ * @return array
+ *   Returns form array in case this is not an AJAX call.
+ *
+ * @see media_edit_all_menu()
+ */
+function media_edit_all_file_page_edit_multiple($form, &$form_state, $ajax, $files) {
+  module_load_include('inc', 'file_entity', 'file_entity.pages');
+  module_load_include('inc', 'media_bulk_upload', 'includes/media_bulk_upload.pages');
+
+  $form += media_bulk_upload_file_page_edit_multiple($files);
+
+  if ($ajax) {
+    ctools_include('modal');
+    ctools_include('ajax');
+
+    $form_state['ajax'] = $ajax;
+    $form_state += array(
+      're_render' => FALSE,
+      'no_redirect' => !empty($form_state['ajax']),
+    );
+
+    $commands = ctools_modal_form_render($form_state, $form);
+
+    $errors = form_get_errors();
+    if (!empty($form_state['input']['op']) && empty($errors)) {
+      $commands = array(ctools_modal_command_dismiss(t('File saved')));
+    }
+
+    print ajax_render($commands);
+
+    // Because we're accounting for both AJAX & Non AJAX we're doing an exit.
+    // There's no reliable switch to do it an a hook_delivery_alter() for this
+    // path.
+    exit();
+  }
+  else {
+    return $form;
+  }
+}
+
+/**
+ * Implements hook_multiform_get_form_alter().
+ */
+function media_edit_all_multiform_get_form_alter(&$form_state_save, &$redirect, $all_args) {
+  // It is literally impossible to do anything but an arg() check because
+  // media_file_page_edit_multiple() does a call_user_func_array() which looses
+  // all the context were ever going to get in this alter hook.
+  // We also cannot blindly set input to false in case a user actually uses
+  // the multi-file upload.
+  if (arg(3) === 'media-edit-all') {
+    $form_state_save['input'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_media_edit_multiple_form_alter().
+ */
+function media_edit_all_media_edit_multiple_form_alter(&$form) {
+  // It is literally impossible to do anything but an arg() check.
+  if (arg(3) === 'media-edit-all' && arg(4) === 'ajax') {
+    // Replace the cancel button with a ajax-dismissed.
+    $form['buttons']['cancel']['#attributes']['class'] = array('media-edit-all-cancel', 'overlay-exclude');
+    $form['buttons']['cancel']['#attached']['js'][] = drupal_get_path('module', 'media_edit_all') . '/js/media-edit-all-modal.js';
+  }
+}
+
+/**
+ * Implements hook_library().
+ */
+function media_edit_all_library() {
+  // Library One.
+  $libraries['media.editAll'] = array(
+    'title' => 'Media Edit All',
+    'website' => 'https://github.com/NBCUOTS/Publisher7',
+    'version' => '1.0',
+    'js' => array(
+      drupal_get_path('module', 'media_edit_all') . '/js/media-edit-all.js' => array(),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function media_edit_all_field_widget_form_alter(&$element, &$form_state, $context) {
+  $media_fields = &drupal_static(__FUNCTION__);
+  if (!isset($media_fields['fields'])) {
+    $file_fields = field_read_fields(array('type' => 'file'));
+    $media_fields['fields'] = array_keys($file_fields);
+  }
+
+  if (isset($element['#field_name']) && !isset($media_fields[$element['#field_name']]) && in_array($element['#field_name'], $media_fields['fields'])) {
+    $media_fields[$element['#field_name']] = TRUE;
+    $element['#attached']['library'][] = array('media_edit_all', 'media.editAll');
+  }
+}

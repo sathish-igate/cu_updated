@@ -1,0 +1,98 @@
+<?php
+
+/**
+ * @file
+ * Class PubRelTVEnhanced
+ */
+
+class PubRelTVEnhanced extends PublisherWebTestCase {
+
+  /**
+   * The admin user that will be created.
+   */
+  protected $admin;
+
+  /**
+   * Implementation of getInfo method.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Publisher Relationship TV Enhanced Views',
+      'description' => 'Verify Views relationship',
+      'group' => 'Publisher Relationship TV Enhanced',
+    );
+  }
+
+  /**
+   * Implementation of setUp method.
+   */
+  public function setUp() {
+    parent::setUp(array('pubtvrelview'));
+  }
+
+  /**
+   * Implementation of test case.
+   */
+  public function testPubRelTVEnhanced() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Create a TV Show node.
+    $title = $this->randomName(8);
+    $synopsis = $this->randomName(20);
+    $show_settings = array(
+      'title' => $title,
+      'type' => 'tv_show',
+      'body' => array(
+        LANGUAGE_NONE => array(
+          0 => array(
+            'value' => $synopsis,
+            'format' => 'wysiwyg_mini',
+          ),
+        ),
+      ),
+      'field_logo' => array(LANGUAGE_NONE => array(0 => array('fid' => 1))),
+      'field_tv_cover_media' => array(LANGUAGE_NONE => array(0 => array('fid' => 1, 'display' => 1))),
+      'field_banner' => array(LANGUAGE_NONE => array(0 => array('fid' => 1))),
+      'event' => 'to_published',
+      'event_comment' => $this->randomString(20),
+      'status' => 1,
+    );
+    $show = $this->drupalCreateNode($show_settings);
+    $this->assert(!empty($show->nid), 'The TV Show node has been created.');
+
+    // Create a TV Season node.
+    $season_settings = array(
+      'type' => 'tv_season',
+      'field_season_id' => array(LANGUAGE_NONE => array(0 => array('value' => '1'))),
+      'body' => array(
+        LANGUAGE_NONE => array(
+          0 => array(
+            'value' => $this->randomString(20),
+            'format' => 'wysiwyg_mini',
+          ),
+        ),
+      ),
+      'field_tv_shows' => array(
+        LANGUAGE_NONE => array(
+          0 => array(
+            'show' => $show->nid,
+            'season' => 0,
+            'episode' => 0,
+          ),
+        ),
+      ),
+      'event' => 'to_published',
+      'event_comment' => $this->randomString(20),
+      'status' => 1,
+    );
+    $season = $this->drupalCreateNode($season_settings);
+    $this->assert(!empty($season->nid), 'The TV Season node has been created.');
+
+    // Render the view and check if relationship works.
+    views_invalidate_cache();
+    $this->drupalGet('season-list');
+    $this->assertRaw($synopsis, 'The views relationship works.');
+  }
+}

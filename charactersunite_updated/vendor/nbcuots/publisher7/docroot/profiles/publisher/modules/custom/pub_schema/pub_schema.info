@@ -1,0 +1,10 @@
+name = Pub Schema
+description = Publisher extensions and overrides for RestWS Schema
+core = 7.x
+package = Publisher
+dependencies[] = ctools
+dependencies[] = restws_schema
+dependencies[] = strongarm
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = restws_schema

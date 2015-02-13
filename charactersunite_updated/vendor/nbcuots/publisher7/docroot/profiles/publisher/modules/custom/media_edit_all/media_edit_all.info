@@ -1,0 +1,7 @@
+name = Media Edit All
+description = Edit all Items in one click
+core = 7.x
+package = Media
+dependencies[] = ctools
+dependencies[] = media
+dependencies[] = multiform

@@ -1,0 +1,10 @@
+name = Program Guide
+description = Imports airing information about the programs on a given network.
+package = Publisher
+core = 7.x
+version = 7.x-1.0
+
+configure = admin/config/services/program_guide
+
+dependencies[] = entity
+files[] = program_guide.entity.inc

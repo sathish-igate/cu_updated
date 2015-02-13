@@ -1,0 +1,272 @@
+<?php
+/**
+ * @file
+ * The module file for the pub_report_client module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function pub_report_client_menu() {
+  $items = array();
+
+  $items['admin/config/system/pub-status-report'] = array(
+    'title' => 'Pub Status Report',
+    'description' => 'Provide information regarding the current state of this Publisher instance.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_report_client_admin_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  return $items;
+}
+
+
+/**
+ * Generates the form for setting the API key, etc.
+ */
+function pub_report_client_admin_settings_form($form, $form_state, $nid = 0) {
+  $defaults = _pub_report_client_get_current_values();
+
+  $form['pub_report_client_url'] = array(
+    '#title' => t('Reporting URL'),
+    '#type' => 'textfield',
+    '#description' => t('The URL where reports should be sent (e.g. api.publisher7.com).'),
+    '#default_value' => $defaults->url,
+    '#required' => TRUE,
+  );
+  $form['pub_report_client_api_key'] = array(
+    '#title' => t('API Key'),
+    '#type' => 'textfield',
+    '#description' => t('This value will be supplied by the Publisher Core team.'),
+    '#default_value' => $defaults->api_key !== FALSE ? $defaults->api_key : '',
+    '#required' => TRUE,
+  );
+
+  if ($defaults->last_run > 0) {
+    $last_run = format_date($defaults->last_run, 'custom', 'l, m/d/Y h:i a');
+    $form['pub_report_client_run_time'] = array(
+      '#markup' => "<p><strong>Last Run:&nbsp;</strong>$last_run</p>",
+    );
+  }
+
+  return system_settings_form($form);
+}
+
+/**
+ * Validates input from Report Client form.
+ */
+function pub_report_client_admin_settings_form_validate($form, &$form_state) {
+  if (!valid_url($form_state['values']['pub_report_client_url'])) {
+    $message = t('Please enter a valid URL.');
+    form_set_error('pub_report_client_url', $message);
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function pub_report_client_cron() {
+  $settings = _pub_report_client_get_current_values();
+
+  // If the API key hasn't yet been applied, don't continue.
+  if (empty($settings->api_key)) {
+    return;
+  }
+
+  // Gather info for decision making.
+  $last_run = intval($settings->last_run);
+  $interval = json_decode($settings->run_interval);
+  $hours = intval($interval->hours);
+  $minutes = intval($interval->minutes);
+  $test_time = mktime($hours, $minutes);
+
+  // If the previous run occurred longer ago than the target time and
+  // we're at or have passed the target time for today,...
+  if ($last_run < $test_time && $test_time <= time()) {
+    $data = _pub_report_client_gather_report_data();
+
+    $url = trim($settings->url);
+    if (stripos($url, 'http://') === FALSE && stripos($url, 'https://') === FALSE) {
+      $url = 'http://' . $url;
+    }
+    $result = _pub_report_client_send_report($data, $url);
+
+    $last_result = '';
+    if ($result->code == 422) {
+      $last_result .= "(HTTP code: $result->code) ";
+      $severity = WATCHDOG_WARNING;
+    }
+    if (isset($result->data)) {
+      $result_data = drupal_json_decode($result->data);
+      $last_result = $result_data['status'] . ': ' . $result_data['message'];
+
+      if (stripos($result_data['status'], 'error') === FALSE) {
+        $severity = WATCHDOG_INFO;
+      }
+      else {
+        $severity = WATCHDOG_WARNING;
+      }
+    }
+    else {
+      $last_result = 'error: An unknown error occurred during request.';
+      $severity = WATCHDOG_WARNING;
+    }
+
+    variable_set('pub_report_client_last_run', $data['time_sent']);
+
+    $msg  = 'Publisher status report ';
+    $msg .= '(' . format_date($data['time_sent'], 'custom', 'm/d/Y h:i a') . '), ';
+    $msg .= $last_result;
+    watchdog('pub_report_client', $msg, NULL, $severity);
+  }
+}
+
+/**
+ * Retrieve the current settings, providing defaults where necessary.
+ */
+function _pub_report_client_get_current_values() {
+  $data = new stdClass();
+  $data->url = variable_get('pub_report_client_url', 'api.publisher7.com');
+  $data->api_key = variable_get('pub_report_client_api_key', FALSE);
+  $data->last_run = variable_get('pub_report_client_last_run', 0);
+  $data->run_interval = variable_get('pub_report_client_run_interval', '{"minutes":0, "hours":1}');
+
+  return $data;
+}
+
+/**
+ * Gather up the data to be sent to the server.
+ */
+function _pub_report_client_gather_report_data() {
+  $modversions = _pub_report_client_get_module_versions();
+  $data = array(
+    'api_key' => variable_get('pub_report_client_api_key', ''),
+    'api_version' => '2.0',
+    'modules_array' => module_list(),
+    'module_versions' => is_array($modversions) ? serialize($modversions) : '',
+    'site_name' => variable_get('pub_site_shortname', ''),
+    'admin_theme' => variable_get('admin_theme', ''),
+    'default_theme' => variable_get('theme_default', ''),
+    'tabular_data' => _pub_report_client_gather_tabular_data(),
+    'drupal_version' => VERSION,
+    'time_sent' => time(),
+  );
+
+  if (defined('PUBLISHER_VERSION')) {
+    $data['publisher_version'] = PUBLISHER_VERSION;
+  }
+
+  $install_profile = variable_get('install_profile', '');
+  if (!empty($install_profile)) {
+    $data['publisher_profile'] = $install_profile;
+  }
+
+  return $data;
+}
+
+/**
+ * Helper function for gathering tabular data.
+ */
+function _pub_report_client_gather_tabular_data() {
+  $tabular_data = array();
+
+  // Nodes by type.
+  $query = db_select('node');
+  $query->fields('node', array('type'));
+  $query->addExpression('COUNT(nid)', 'number');
+  $query->groupBy('type');
+  $result = $query->execute();
+  $records = $result->fetchAll();
+  foreach ($records as $key => $value) {
+    $records[$key] = (array) $value;
+  }
+  $tabular_data['nodes_by_type']['data'] = $records;
+  $tabular_data['nodes_by_type']['caption'] = "Nodes by type";
+
+  // Disk usage.
+  $disk_usage = array();
+  $disk_usage[] = array('directory' => 'files_public', 'size' => _pub_report_get_directory_size('../files_public'));
+  $disk_usage[] = array('directory' => 'files_private', 'size' => _pub_report_get_directory_size('../files_private'));
+  $tabular_data['disk_usage']['data'] = $disk_usage;
+  $tabular_data['disk_usage']['caption'] = "Files disk usage";
+
+  // Taxonomy terms by vocabulary.
+  $query = db_select('taxonomy_vocabulary', 'tv');
+  $query->join('taxonomy_term_data', 'ttd', 'ttd.vid = tv.vid ');
+  $query->fields('tv', array('name'));
+  $query->addExpression('COUNT(ttd.tid)', 'number');
+  $query->groupBy('tv.name');
+  $result = $query->execute();
+  $records = $result->fetchAll();
+  foreach ($records as $key => $value) {
+    $records[$key] = (array) $value;
+  }
+  $tabular_data['tax_terms_by_vocab']['data'] = $records;
+  $tabular_data['tax_terms_by_vocab']['caption'] = "Taxonomy terms";
+
+  // Users by role.
+  $query = db_select('users_roles', 'ur');
+  $query->join('users', 'u', 'u.uid = ur.uid');
+  $query->join('role', 'r', 'r.rid = ur.rid');
+  $query->addExpression('r.name', 'role');
+  $query->addExpression('COUNT(u.uid)', 'number');
+  $query->groupBy('r.rid');
+  $result = $query->execute();
+  $records = $result->fetchAll();
+  foreach ($records as $key => $value) {
+    $records[$key] = (array) $value;
+  }
+  $tabular_data['users_by_role']['data'] = $records;
+  $tabular_data['users_by_role']['caption'] = "Users by role";
+
+  return $tabular_data;
+}
+
+/**
+ * Helper function for getting module versions.
+ *
+ * @return array
+ *   An array of versions, keyed on module name.
+ */
+function _pub_report_client_get_module_versions() {
+  $module_list = module_list();
+  $versions = array();
+  foreach ($module_list as $module_name) {
+    $module_info = system_get_info('module', $module_name);
+    $versions[$module_name] = $module_info['version'];
+  }
+  return $versions;
+}
+
+/**
+ * Sends the actual report.
+ */
+function _pub_report_client_send_report($data, $domain, $timeout = 15) {
+  $url = $domain . '/report_api/report';
+
+  $options = array(
+    'method' => 'POST',
+    'data' => drupal_http_build_query($data),
+    'timeout' => $timeout,
+    'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+  );
+
+  return drupal_http_request($url, $options);
+}
+
+/**
+ * Helper function to get directory sizes.
+ *
+ * @param string $directory
+ *   Path to the directory to report on.
+ *
+ * @return int
+ *   Size in bytes.
+ */
+function _pub_report_get_directory_size($directory) {
+  $size = 0;
+  foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory)) as $file) {
+    $size += $file->getSize();
+  }
+  return $size;
+}

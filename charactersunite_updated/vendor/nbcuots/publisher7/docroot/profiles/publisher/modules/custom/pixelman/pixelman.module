@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Pixelman Integration module.
+ */
+
+/**
+ * Implements hook_page_alter().
+ */
+function pixelman_page_alter(&$page) {
+  if (!path_is_admin(current_path())) {
+    // Globally add "pixelman" scripts to the header and footer of all pages.
+    // For details, see http://nbcudigitaladops.com/pixelman/pixelman.pdf. These
+    // JS files autodetect the current domain and include other files. This can
+    // cause 404 errors on dev & stage servers.
+    $page['content']['#attached']['js']['//www.nbcudigitaladops.com/hosted/global_header.js'] = array(
+      'type' => 'external',
+      'scope' => 'header',
+      'group' => JS_LIBRARY,
+      'every_page' => TRUE,
+      'force header' => TRUE,
+    );
+    $page['content']['#attached']['js']['//www.nbcudigitaladops.com/hosted/global.js'] = array(
+      'type' => 'external',
+      'scope' => 'footer',
+      'group' => JS_LIBRARY,
+      'every_page' => TRUE,
+      'weight' => 100,
+    );
+  }
+}
+
+/**
+ * Implements preprocess_html().
+ */
+function pixelman_preprocess_html(&$variables) {
+  if (module_exists('dfp')) {
+    $js = 'if (top.__nbcudigitaladops_inject && top.__nbcudigitaladops_inject.getGPT) {
+      var _GPT_params = top.__nbcudigitaladops_inject.getGPT();
+      for ( var _key in _GPT_params ){
+        if( _GPT_params.hasOwnProperty(_key) ){
+            googletag.pubads().setTargeting( _key, _GPT_params[_key] );
+        }
+      }
+    }';
+
+    // This must appear before the googletag.enableServices() call.
+    $options = array(
+      'type' => 'inline',
+      'group' => JS_DEFAULT,
+      'every_page' => TRUE,
+      'weight' => -100,
+      'force header' => TRUE,
+    );
+    drupal_add_js($js, $options);
+  }
+}

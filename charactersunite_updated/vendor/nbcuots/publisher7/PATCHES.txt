@@ -1,0 +1,491 @@
+==================================== CORE ======================================
+________________________________________________________________________________
+CORE
+  * In default.settings.php the maintenance theme has explicitly been set to
+    "pub_sauce" so that it will be used during installation.
+
+  * Modified .htaccess to point to an alternative robots.txt file on non-www
+    domains (docroot/robots_noindex.txt).
+
+  * Watchdog table not installed when watchdog module enabled.
+    https://drupal.org/node/429188#comment-7772877
+
+    *note: Final fix will likely be in https://drupal.org/node/1784548,
+    DB Log is missing watchdog table after enabling - Need to catch and ignore
+    exceptions thrown in dblog_watchdog()
+
+  * SelectQuery::fields() must be an array, null given entity.inc on line 284
+    SelectQuery->fields() (line 1262 select.inc
+    https://drupal.org/node/1158114#comment-8232189
+
+  * Allow multiple revision to be queried at once.
+    https://drupal.org/node/1730874#comment-6349692
+
+  * Allowed subsecond lock_wait()
+    https://drupal.org/node/2096259#comment-7891519
+
+  * Store cache_page items with a real expiry instead of CACHE_TEMPORARY.
+    https://drupal.org/node/1279654#comment-6473782
+
+  * Use the standard page caching settings for 301 redircts.
+    https://drupal.org/comment/8427433#comment-8427433
+
+  * The image module can throw an array_merge error in Drupal > 7.22.
+    https://drupal.org/node/1973278#comment-8466009
+
+  * Add a variable to disable fixing file permissions in
+    drupal_install_fix_file. This stops git locals from breaking when changing
+    branches and system_requirements() or a site install has been run.
+    https://drupal.org/node/1232572#comment-8341843
+    NOTE: in master there is no sites/default.settings.php so one hunk of this
+          patch will fail. That's ok.
+
+  * Enable users to determine which types of watchdog messages get written to
+    syslog. Right now it's all or nothing.
+    https://drupal.org/comment/8455047#comment-8455047
+
+  * Resetting the cache for a single entity resets the entire entity cache
+    https://drupal.org/node/2281543
+
+  * Remove PHP module.
+    https://github.com/backdrop/backdrop/pull/81.patch
+
+  * drupal_add_js() defer and async options break when aggregation is enabled
+    (Replace with universal attributes array)
+    https://www.drupal.org/node/1664602#comment-9469181
+
+  * Race condition in node_save() when not using DB for cache_field. This looks
+    like it would apply to all data and not just that in the field cache.
+    https://www.drupal.org/node/1679344#comment-9428917
+
+================================== CONTRIB =====================================
+________________________________________________________________________________
+ACQUIA CLOUD STICKY SESSIONS
+  * You get a headers already sent when using drush site-install with a profile
+    that includes this module.
+    https://drupal.org/node/2118669#comment-7993225
+
+ACQUIA PURGE
+  * Add basic support for Revision Scheduler, nodes for now
+    https://www.drupal.org/node/2303949#comment-9418425
+
+  * Allow Disabling of Client-side Queue Running
+    https://www.drupal.org/node/2228949#comment-9404745
+
+  * Conflict with Drupal 7.33+ producing "Illegal string offset" warnings on
+    overview page
+    https://www.drupal.org/node/2379227#comment-9404773
+
+  * Support token for purging
+    https://www.drupal.org/node/2388079#comment-9408073
+
+AKAMAI
+  * Log environment purged, i.e. staging/production
+    https://www.drupal.org/node/2311937#comment-9009413
+
+  * Purge after Acquia Purge (Varnish)
+    https://www.drupal.org/node/2311361#comment-9012717
+
+  * Not purging redirects
+    https://www.drupal.org/node/2312203#comment-9013379
+
+Automatic Node Titles
+  * Memory exhausted when editing content type with Token module enabled
+    https://www.drupal.org/node/1391706#comment-8976469
+
+COLLECTIONS
+  * Permissions broken/changed
+    http://drupal.org/node/1795094
+    http://drupalcode.org/project/collections.git/patch/84b2e06 (committed)
+
+  * Permission "Add a collection" changed to "Create a collection"
+    http://drupal.org/node/1902366#comment-6999952
+
+  * Update permission names in DB
+    http://drupal.org/node/1902398#comment-7000184
+
+  * Fix broken delete button on Collection edit form
+    http://drupal.org/node/1902472#comment-7000548
+
+  * PDO Exception when editing a collection then saving without doing anything
+    http://drupal.org/node/1992198#comment-7400036
+
+  * Disable ability to edit machine name once collection created
+    http://drupal.org/node/1992198#comment-7400036
+
+CONTENT_LOCK
+  * Temporary patch for the content locking error happening in Google Chrome
+    http://www.drupal.org/node/2145291#comment-9306909
+
+CONTEXT_BREAKPOINT
+  * Current context is not checked against existing cookie when page is loaded
+    http://drupal.org/node/1866322#comment-6843404
+
+  * Use contexts for cookie instead of browser dimensions
+    http://drupal.org/node/1882372#comment-6912234
+
+DART
+  * JS error when loading modal containing a view.
+    https://drupal.org/node/2013979#comment-7507483
+
+  * Libraries definition and detection need tweaking.
+    https://drupal.org/node/2013947#comment-7507377
+
+  * Improved performance for _dart_add_key_val()
+    https://drupal.org/node/2118653#comment-7993709
+
+DATE
+  * Allow forced timezone filtering in date views.
+    https://drupal.org/node/1820304#comment-7875519
+
+DEVEL
+  * Support generating an arbitrary number multi-value items with unlimited
+    cardinality fields
+    https://drupal.org/node/2182933#comment-8420075
+
+DFP
+  * Resolves issue in which unmodified value is returned for term value.
+    https://drupal.org/node/2248255#comment-8711405
+
+EMBER
+  * tables.css 404
+    https://www.drupal.org/node/2389413#comment-9414739
+
+  * Jquery dialog close button not visible
+    https://www.drupal.org/node/2390077#comment-9417989
+
+  * Add styling for media browser title bar
+    https://www.drupal.org/node/2400127#comment-9471117
+
+ENTITY
+  * Entity should be checking the "controller class base" as well as the
+    "controller class" when deciding if an object is using the entity API. To
+    fix this, apply the patch found here:
+    http://drupal.org/node/1875836#comment-6890782
+
+ENTITY CACHE
+  * entityCacheAttachLoad doesn't take the $enitites param by reference.
+    https://drupal.org/node/2044291#comment-7689169
+  * Unnecessary cache writes when all entities are loaded.
+    https://drupal.org/node/2035577#comment-8661789
+
+ENTITYREFERENCE
+  * People seems to be able to disable a Field module which still has fields
+    and core seems to call field hooks on disabled modules
+    http://drupal.org/node/1459540#comment-5855536
+
+  * Allowing widgets to contain html entities
+    https://drupal.org/node/2017313
+
+ENTITYREFERENCE LIVE PREVIEW
+  * Apply a clearfix class onto the node so that it will render the proper size.
+    http://drupal.org/node/1727884#comment-6342036
+
+  * Make Chrome work for the preview.
+    http://drupal.org/node/1549444#comment-6347432
+
+Environment Indicator
+  * Remove Extra JS file causing everything in Navbar to have white text.
+    https://www.drupal.org/node/2377897#comment-9354429
+
+ESI
+  * Make the hook_esi_component_info_alter work.
+    http://drupal.org/node/1901362#comment-6995132
+
+EXIF
+  @see SIMPLE EXIF
+
+FB (FACEBOOK FOR DRUPAL)
+  * DPM showing on admin/structure/fb/fb_stream
+    https://drupal.org/node/2045291#comment-7660443
+
+FENCES
+  * There is a bug in Fences that causes errors during installation. This patch
+    has already been committed to Fences so we have applied it:
+    http://drupal.org/node/1561244#comment-6251228
+
+FIELD COLLECTION
+  * Prevent Field Collection from removing field collection when node_save
+    is called from state_machine-7.x.-3.x-dev.
+    NOTE: The issue is marked as closed, but this patch is still needed!
+    https://drupal.org/node/1807460#comment-8652107
+
+FILE LOCK
+  * Issues with entity_load because file_lock declares a fake entity
+    https://www.drupal.org/node/2262161
+
+GIGYA
+  * An undefined variable, login_div, was displaying as an error when Gigya
+    isn't enabled/initialized.
+    https://drupal.org/comment/8265555#comment-8265555
+
+  * Syntax error in jQuery selector
+    https://www.drupal.org/node/2301663#comment-8960285
+
+  * Why is gigya adding it's JS in the head above JS and CSS.
+    https://www.drupal.org/node/2020717#comment-9271639
+
+HIDE SUBMIT
+  * Hide submit should use drupal_alter
+    https://drupal.org/node/2080817#comment-7823341
+
+IMAGEFIELD FOCUS
+  * Integrated imagefield_focus with the Media module.
+    http://drupal.org/node/1781778
+
+  * There is a webkit bug that causes the focus widget to fail.
+    https://drupal.org/node/2043421#comment-7652073
+      and
+    https://drupal.org/node/2043421#comment-7671391
+
+IMAGEMAGICK
+  * Add option for progressive jpegs
+    https://drupal.org/comment/6936908#comment-6936908
+
+  * Prevent scaling from breaking animated gifs
+    https://drupal.org/comment/7225342#comment-7225342
+
+JQUERY_COUNTDOWN
+  * Add ability for the field to invoke a JS function on expire.
+    https://www.drupal.org/node/2328755#comment-9098837
+
+JQUERY UPDATE
+  * Support (optionally) the use of the jQuery Migrate Plugin
+    https://www.drupal.org/node/2156881#comment-8968193
+
+MEDIA
+  * Media browser popup not closing itself properly.
+    https://www.drupal.org/node/2093435#comment-9364947
+
+  * Add fake_buttons_alter()
+    https://drupal.org/comment/8165739#comment-8165739
+
+  * Move Edit button under Operations column
+    https://www.drupal.org/node/2382105#comment-9377213
+
+MEDIA MULTISELECT
+  * Latest media changes break the multiselect
+    https://www.drupal.org/node/2216273#comment-8959589
+
+MEDIA THEPLATFORM MPX
+  * Fix to MPX URL parsing for mpx video mediat
+    https://drupal.org/comment/8543435#comment-8543435
+  * Update from deprecated media_access().
+    The function is now undefined, and replaced with file_entity_access().
+    https://drupal.org/node/2194189
+  * Fix errant column types
+    https://www.drupal.org/node/2357467#comment-9251451
+
+MEMCACHE
+  * >1M data writes incompatible with memcached (memcached -I 32M -m32)
+    https://www.drupal.org/node/435694#comment-8980497
+
+METATAG
+  * Support new 'See It' Twitter Card
+    https://drupal.org/node/2118859#comment-7994003
+  * Using metatag tokens can easily cause an infinite loop
+    https://www.drupal.org/node/2198669#comment-9316529
+
+MULTIPLE FORMS
+  * Allow multiform forms to be atler.
+    https://drupal.org/node/1889652#comment-8787585
+
+NAVBAR
+  * Add "Add Content" submenu.
+    https://www.drupal.org/node/2377543#comment-9352563
+
+  * tableHeaderOffset not set / Sticky header overlayed by navbar, causes AJAX
+    errors (ex: Views UI)
+    https://www.drupal.org/node/1937754#comment-9346879
+
+NODEQUEUE
+  * Add node image to node ordering form.
+    http://drupal.org/node/1806614#comment-6620974
+
+PASSWORD POLICY
+  * Constraint: First and Last Letters of Password Must Be Letters
+    http://drupal.org/node/1814664
+
+PATHAUTO
+  * "Do nothing. Leave old alias intact" does not uncheck "Generate automatic
+    URL alias" checkbox on first edit, but does on subsequent edits
+    https://drupal.org/node/2272871#comment-8822571
+
+  * Add support for Pathauto in 3.x
+    https://www.drupal.org/node/2363585#comment-9292943
+
+PERSONALIZE
+  * Fix line endings in SVG files
+    https://www.drupal.org/node/2339673#comment-9153903
+
+QUEUES
+  * Added two new handler files (views_handler_field_queue_link.inc,
+    views_handler_field_queue_publish), edited info and queues.views.inc
+    files. See Eric and Elijah because Alex's code may also
+    conflict with this and it is hosted on github, we will work
+    out a way to patch at the end of the iteration 28.
+
+  * There is a chance the queues_workbench_form_submit() function will be
+    deleted on update. There is no patch, but do not delete this function.
+
+  * Added a dependency on "workbench_moderation", in queues_workbench.info.
+
+REBUILD
+  * 7.x-1.7 ships with an old version of Composer's autoloader missing PSR-4.
+    This is fixed upstream already by removing the vendor directory.
+
+REDIRECT
+  * Updating an entity with an URL alias that matches an existing redirect
+    causes bad data and circular redirect
+    https://drupal.org/node/1817976#comment-7753335
+
+REPRESENTATIVE IMAGE
+  * Added alter hook to views field handler.
+    https://drupal.org/node/1988124#comment-7558233
+
+  * Add better support for Image bundles + improved
+    hook_representative_image_views_handler_render()
+    https://drupal.org/node/2272073#comment-8801031
+
+REVISION SCHEDULER
+  * Patches for Workbench Moderation 2.x
+    https://drupal.org/node/2022535#comment-7596827
+
+  * Patches for deleted entities
+    https://drupal.org/node/2093447#comment-7891291
+
+  * Views support
+    https://drupal.org/node/1471868#comment-8011581
+
+  * Move revision_scheduler_operation_postprocess hook after db_update().
+    https://drupal.org/node/2113131#comment-7971407
+
+  * Add an alter hook to the scheduled revision listing page.
+    https://drupal.org/node/2113139#comment-7971433
+
+  * Use dropbuttons for the actions on the schedule tab.
+    https://drupal.org/node/2117139#comment-7987283
+
+  * Allow operation scheduling from edit form.
+    https://drupal.org/comment/8648003#comment-8648003
+
+  * More flexible handling of date pattern and time increment.
+    https://drupal.org/node/2259201#comment-8750455
+
+  * Clean up revision_scheduler data after an entity_delete.
+    https://www.drupal.org/node/2297423#comment-8950311
+
+REVISION SCHEDULER SPS
+  * Include support for Dynamic Queue
+    https://github.com/ericduran/drupal-revision_scheduler_sps/pull/2
+
+RULES
+  * Check for existence of RulesEventSet class to prevent fatal error.
+    https://www.drupal.org/node/1541888#comment-8864473
+
+SERVICES
+  * Added spyc.php to services/servers/rest_server/lib
+    wget https://raw.github.com/mustangostang/spyc/79f61969f63ee77e0d9460bc254a27a671b445f3/spyc.php -O  servers/rest_server/lib/spyc.php
+    @see services/README.txt
+
+SIMPLE EXIF
+  * Resolves issue in which the keyword field appears with no commas.
+    https://drupal.org/comment/8419863#comment-8419863
+
+  * Converts non-UTF-8 strings to that format.
+    https://drupal.org/comment/8569579#comment-8569579
+
+SIMPLESAML PHP AUTH
+  * In order to allow the SimpleSAMLphp library to know about the various
+    Publisher domains there are include directives within the following files:
+      /simplesamlphp/config/config.php
+      /simplesamlphp/config/authsources.php
+      /simplesamlphp/metadata/saml20-idp-remote.php
+
+  * Create authmap entries for pre-existing Drupal users
+    https://www.drupal.org/node/1280930#comment-9473913
+
+  * SAML authentication works even when SimpleSAML auth is disabled
+    https://www.drupal.org/node/2395811#comment-9471897
+
+SITECATALYST
+  * Allow for variable overrides on a per node basis
+    https://www.drupal.org/node/2193069#comment-8907509
+
+SOFT LENGTH LIMIT
+  * Resolves issue in which Soft Length Limits don't work on custom Content Type titles:
+    https://drupal.org/node/2065243#comment-9077625
+
+  * Resolves issue in which OK icon displays before minimum is met:
+    https://drupal.org/node/2065463#comment-9077737
+
+  * Reversed soft length limit and soft length limit minimum fields.
+
+  * Fixed overlapping text with helper text.
+
+SPS
+  * Fixing Field_collections:
+    http://drupal.org/node/1979130#comment-7340490
+
+  * SPS errors when using Views with a relationship
+    https://drupal.org/comment/8472699#comment-8472699
+
+  * Minor doc cleanup and changed getRootCondition() to be public vs private.
+    https://drupal.org/comment/8456927#comment-8456927
+
+  * Remove Query Alter functionality in SPS.
+    https://www.drupal.org/node/2320861
+
+STATE MACHINE > STATE FLOW
+  * Do not force state_flow_node on node entities
+    https://drupal.org/node/2038867#comment-7632807
+  * Add check if StateMachine::get_event() returns FALSE in state_flow_node_submit().
+    https://drupal.org/comment/8158783#comment-8158783
+  * Add Views join on node table for state_flow_states.
+    https://drupal.org/comment/8203507#comment-8203507
+
+
+STICKY EDIT ACTIONS
+  * Doesn't work with Media module's fake buttons (plugins)
+    https://drupal.org/comment/8165679#comment-8165679
+
+  * Display issues occur when multiple Sticky Edit Actions appear in the same document.
+    https://drupal.org/comment/8167665#comment-8167665
+
+TINYMCE
+  * Fixes issue when a CTools modal window has a TinyMCE formatted field and breaks
+    the Save function.  Solution found and commented on at
+    http://www.tinymce.com/develop/bugtracker_view.php?id=3152
+    Fix can be found in tiny_mce_src.js lines 9293 through 9341. After making changes in
+    tiny_mce_src.js you must then be compressed and saved as tiny_mce.js
+
+TWITTER
+  * Fixes Warning: Invalid argument supplied for foreach() in form_type_checkboxes_value()...
+    https://drupal.org/node/2005516#comment-7508187 (committed 2013.08.06)
+
+  * Include link to status/tweet in the drupal_set_message upon success
+    https://drupal.org/node/2022485#comment-7552403
+
+  * Add return $status to twitter_post_node_insert() for module_invoke()
+    https://drupal.org/node/2022561#comment-7565981
+
+VIEWS
+  * Fixes edit-link destination when using AJAX-enabled views, and more specifically,
+    fixes the wsod issue when using admin_views and trying to reset the view.
+    Solution found and commented on at
+    http://drupal.org/node/1036962#comment-6665274
+
+  * Fixes warnings caused by PHP 5.4 when overridding views cache using hook_views_pre_build,
+    or when enabling views_cache_bully module to override views cache settings.
+    https://drupal.org/node/2018737#comment-8522075
+
+WORKBENCH
+  * Fixes "Notice: Undefined index: #contextual_links in contextual_pre_render_links()
+    (line 140 of /Users/Piotr/Sites/publisher7/docroot/modules/contextual/contextual.module)" message.
+    Fix can be found in workbench.theme.inc lines 23-24.
+    Fix has also been already submitted here (and it's waiting for approval):
+    https://drupal.org/node/1727284#comment-6458552
+
+WORKBENCH MODERATION
+  * Do not alter every entity type.
+    https://drupal.org/node/2053265#comment-7698253

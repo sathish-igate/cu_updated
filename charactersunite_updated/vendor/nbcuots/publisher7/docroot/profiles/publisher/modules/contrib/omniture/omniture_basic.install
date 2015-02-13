@@ -1,0 +1,31 @@
+<?php
+/**
+ * @file
+ * Installs the module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function omniture_basic_uninstall() {
+  $or = db_or()
+    ->condition('v.name', 'omniture_vocabvidvar_%', 'LIKE')
+    ->condition('v.name', 'omniture_var_%', 'LIKE');
+
+  $result = db_select('variable', 'v')
+    ->fields('v')
+    ->condition($or)
+    ->execute();
+
+  foreach ($result as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Update to Drupal 7. Set the version number for new installs.
+ */
+function omniture_basic_update_7000() {
+  $ret = array();
+  return $ret;
+}

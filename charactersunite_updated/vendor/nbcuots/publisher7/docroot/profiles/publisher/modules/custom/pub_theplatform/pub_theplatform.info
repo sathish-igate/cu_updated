@@ -1,0 +1,38 @@
+name = Pub thePlatform
+description = Presents thePlatform feeds/items into Views so that they can be included on the site.
+core = 7.x
+version = 7.x-1.0
+
+package = Publisher
+
+configure = admin/config/services/theplatform
+
+; API and Test Includes
+files[] = theplatform.api.inc
+files[] = pub_theplatform.api.inc
+files[] = pub_theplatform.test
+
+; Views Includes
+files[] = pub_theplatform_views_plugin_query.inc
+files[] = handlers/pub_theplatform_views_handler_field_category.inc
+files[] = handlers/pub_theplatform_views_handler_field_pubdate.inc
+files[] = handlers/pub_theplatform_views_handler_field_thumb.inc
+files[] = handlers/pub_theplatform_views_handler_filter_guid.inc
+files[] = handlers/pub_theplatform_views_handler_filter_title.inc
+files[] = handlers/pub_theplatform_views_handler_filter_category.inc
+files[] = handlers/pub_theplatform_views_handler_sort.inc
+files[] = handlers/pub_theplatform_views_handler_sort_pubdate.inc
+files[] = handlers/pub_theplatform_views_handler_sort_short_description.inc
+files[] = handlers/pub_theplatform_views_handler_argument_category.inc
+files[] = handlers/pub_theplatform_views_handler_argument_guid.inc
+files[] = handlers/pub_theplatform_views_handler_argument_customvalue.inc
+
+; Media includes
+files[] = media/media_browser.inc
+files[] = media/MediaInternetThePlatformHandler.inc
+files[] = media/MediaThePlatformStreamWrapper.inc
+
+; Contrib module dependencies
+dependencies[] = views
+dependencies[] = media
+dependencies[] = media_internet

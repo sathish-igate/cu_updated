@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Install and uninstall functions for zeebox Example module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function zeebox_example_install() {
+  $t = get_t();
+  zeebox_example_create_beans();
+  drupal_set_message($t('Visit <a href="!link">the zeebox-example page</a> to view the zeebox blocks available. When you disable the zeebox Example module make sure to uninstall it and it will delete all the example blocks.', array('!link' => '/zeebox-example')));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function zeebox_example_uninstall() {
+  drupal_load('module', 'zeebox_example');
+  zeebox_example_delete_beans();
+}

@@ -1,0 +1,8 @@
+name = Feature Publisher7 MPX Views
+core = 7.x
+package = Publisher
+dependencies[] = views
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[views_view][] = pub_mpx_video_media_browser
+features_exclude[dependencies][ctools] = ctools

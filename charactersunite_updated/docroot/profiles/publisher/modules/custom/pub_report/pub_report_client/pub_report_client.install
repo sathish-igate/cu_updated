@@ -1,0 +1,39 @@
+<?php
+/**
+ * @file
+ * Install file for pub_report_client module.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function pub_report_client_requirements($phase) {
+  $t = get_t();
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    $server_url = variable_get('pub_report_client_url', '');
+    $not_set = $server_url == '';
+
+    // The 'pub_report_client_url' variable must have a value.
+    $requirements['pub_report_client_url'] = array(
+      'title' => $t('Report Client URL'),
+      'value' => $server_url,
+      'description' => $not_set ? $t('The <a href="@url">Report Client URL</a> has not been set.', array('@url' => '/admin/config/system/pub-status-report')) : '',
+      'severity' => $not_set ? REQUIREMENT_ERROR : REQUIREMENT_OK,
+    );
+
+    $api_key = variable_get('pub_report_client_api_key', '');
+    $not_set = $api_key == '';
+
+    // The 'pub_report_client_api_key' variable must have a value.
+    $requirements['pub_report_client_api_key'] = array(
+      'title' => $t('Report Client API Key'),
+      'value' => $api_key,
+      'description' => $not_set ? $t('The <a href="@url">Report Client API Key</a> has not been set.  Please contact the Publisher team for this API key.', array('@url' => '/admin/config/system/pub-status-report')) : '',
+      'severity' => $not_set ? REQUIREMENT_ERROR : REQUIREMENT_OK,
+    );
+  }
+
+  return $requirements;
+}

@@ -1,0 +1,51 @@
+name = Pub Crawl
+description =  pub_crawl theme based on the Aurora base theme.
+core = 7.x
+base theme = aurora
+
+; Stylesheets
+stylesheets[all][] = stylesheets/style.css
+stylesheets[print][] = stylesheets/print.css
+stylesheets-conditional[lt IE 9][all][] = stylesheets/ie.css
+
+; Regions
+regions[header]         = Header
+regions[highlighted]    = Highlighted
+regions[help]           = Help
+regions[main_prefix]    = Main Region Prefix
+regions[content]        = Content
+regions[sidebar_first]  = Primary Sidebar
+regions[sidebar_second] = Secondary Sidebar
+regions[main_suffix]    = Main Region Suffix
+regions[footer]         = Footer
+
+; THEME OPTIONS
+
+; Chrome Frame Options
+settings[aurora_enable_chrome_frame] = 1
+settings[aurora_min_ie_support] = 10
+
+; Optimization Options
+settings[aurora_footer_js] = 1
+settings[aurora_html_tags] = 1
+settings[aurora_libraries_head] = 1
+
+; Toggle Display
+settings[toggle_logo] = 1
+settings[toggle_name] = 1
+settings[toggle_slogan] = 1
+settings[toggle_node_user_picture] = 1
+settings[toggle_comment_user_picture] = 1
+settings[toggle_comment_user_verification] = 1
+settings[toggle_favicon] = 1
+settings[toggle_breadcrumbs] = 1
+
+; Logo Settings
+settings[default_logo] = 0
+settings[logo_path] = profiles/publisher/themes/pub_crawl/logo.svg
+
+; Development Options
+settings[aurora_rebuild_registry] = 1
+settings[aurora_livereload] = 0
+settings[aurora_viewport_width] = 1
+settings[aurora_modernizr_debug] = 1

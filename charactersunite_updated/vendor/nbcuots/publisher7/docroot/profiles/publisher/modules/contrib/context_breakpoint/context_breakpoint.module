@@ -1,0 +1,57 @@
+<?php
+/**
+ * @file context_screenresolution.module
+ * Main module file.
+ */
+
+/**
+ * Implements hook_init().
+ */
+function context_breakpoint_init() {
+  drupal_add_library('system', 'jquery.cookie');
+}
+
+/**
+ * Implements hook_context_plugins().
+ */
+function context_breakpoint_context_plugins() {
+  $plugins = array();
+
+  // Screen resolution plugin.
+  $plugins['context_condition_breakpoint'] = array(
+    'handler' => array(
+      'path' => drupal_get_path('module', 'context_breakpoint') . '/plugins',
+      'file' => 'context_condition_breakpoint.inc',
+      'class' => 'ContextConditionBreakpoint',
+      'parent' => 'context_condition',
+    ),
+  );
+
+  return $plugins;
+}
+
+function context_breakpoint_context_registry() {
+  return array(
+    'conditions' => array(
+      'breakpoint' => array(
+        'title' => t('Breakpoint'),
+        'plugin' => 'context_condition_breakpoint',
+      )
+    ),
+  );
+}
+
+/**
+ * Implements hook_context_page_condition().
+ */
+function context_breakpoint_context_page_condition() {
+  $plugin = context_get_plugin('condition', 'breakpoint');
+
+  if ($plugin) {
+    $plugin->execute();
+
+    drupal_add_js(array(
+      'context_breakpoint' => $plugin->getJSConfig(),
+    ), 'setting');
+  }
+}

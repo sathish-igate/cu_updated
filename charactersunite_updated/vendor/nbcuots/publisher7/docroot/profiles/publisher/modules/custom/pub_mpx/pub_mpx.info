@@ -1,0 +1,29 @@
+name = Pub MPX
+description = "Custom modifications to Media: thePlatform mpx functionality.
+Includes placing feeds/items into Views so that they can be included on the
+site."
+core = 7.x
+version = 7.x-2.0
+package = Publisher
+dependencies[] = file_entity
+dependencies[] = file_admin
+dependencies[] = feature_pub_mpx_views
+dependencies[] = libraries
+dependencies[] = media
+dependencies[] = media_internet
+dependencies[] = media_theplatform_mpx
+dependencies[] = revision_scheduler
+dependencies[] = views
+files[] = views/pub_mpx_handler_field_account.inc
+files[] = views/pub_mpx_handler_field_player_account.inc
+files[] = views/pub_mpx_handler_field_status.inc
+files[] = views/pub_mpx_handler_filter_account.inc
+files[] = views/pub_mpx_handler_filter_player_account.inc
+files[] = views/pub_mpx_handler_filter_categories.inc
+files[] = views/pub_mpx_handler_filter_status.inc
+files[] = views/pub_mpx_handler_filter_player_status.inc
+files[] = views/pub_mpx_revision_scheduler_handler_field_actions.inc
+files[] = views/pub_mpx_views_handler_field_mpx_video_thumbnail_url.inc
+files[] = media/media_browser.inc
+files[] = test/pubMPXBaseTest.test
+configure = admin/config/media/theplatform

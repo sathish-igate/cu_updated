@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @file
+ * Installation and schema hooks for wp_report_server.module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function wp_report_server_schema() {
+  $schema = array();
+  $schema['wp_report_sites'] = array(
+    'description' => 'The base table for Site Reports entity',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key of the Site Reports entity',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'site_name' => array(
+        'description' => 'Machine name of the site.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'site_fullname' => array(
+        'description' => 'Name of the site.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'api_version' => array(
+        'description' => 'Report API version.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'wordpress_version' => array(
+        'description' => 'Wordpress CMS version.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'nbcupress_version' => array(
+        'description' => 'NBCUPress version.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'site_plugins' => array(
+        'description' => 'Site-specific plugins json array.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'site_plugins_count' => array(
+        'description' => 'Number of Site-specific plugins json array.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'nbcupress_plugins' => array(
+        'description' => 'Activated NBCUPress plugins json array.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'nbcupress_plugins_count' => array(
+        'description' => 'Number of Activated NBCUPress plugins json array.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'last_report_diff' => array(
+        'description' => 'Diff data from the previous reports for the site plugins.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'last_report_diff_nbcupress' => array(
+        'description' => 'Diff data from the previous reports for the NBCUPress plugins.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'default_theme' => array(
+        'description' => 'Default theme that the site is using.',
+        'type' => 'varchar',
+        'length' => '120',
+        'not null' => FALSE,
+      ),
+      'time_sent' => array(
+        'description' => 'Time when the record was sent by site.',
+        'type' => 'int',
+        'length' => 10,
+        'not null' => TRUE,
+      ),
+      'last_report' => array(
+        'description' => 'Determines whether the record is a most recent report.',
+        'type' => 'int',
+        'length' => 2,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+  return $schema;
+}

@@ -1,0 +1,352 @@
+<?php
+/**
+ * @file
+ * The module file for pub_report_server.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function pub_report_server_entity_info() {
+  $info = array();
+  $info['site_report'] = array(
+    'label' => t('Site Reports'),
+    'base table' => 'pub_report_sites',
+    'entity keys' => array(
+      'id' => 'id',
+      'label' => 'site_name',
+    ),
+    'module' => 'pub_report_server',
+    'uri callback' => 'entity_class_uri',
+    'entity class' => 'SiteReportsEntity',
+    'controller class' => 'EntityAPIController',
+    'access arguments' => 'administer site configuration',
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function pub_report_server_views_api() {
+  return array(
+    'api' => 3.0,
+  );
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function pub_report_server_theme_registry_alter(&$theme_registry) {
+  $theme_registry['views_view_table__site_reports_view'] = $theme_registry['views_view_table'];
+  $theme_registry['views_view_table__site_reports_view']['pattern'] = 'views_view_table__site_reports_view';
+  $theme_registry['views_view_table__site_reports_view']['path'] = drupal_get_path('module', 'pub_report_server') . '/templates';
+  $theme_registry['views_view_table__site_reports_view']['template'] = 'views-view-table--site-reports-view';
+}
+
+/**
+ * Implements hook_menu().
+ */
+function pub_report_server_menu() {
+  $items = array();
+
+  // Create a path for the client to use when submitting a report. API_V1.
+  $items['report_api/report'] = array(
+    'page callback' => 'pub_report_server_add_report_api_v2',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+
+  // Create a path for the configuration form.
+  $items['admin/config/system/pub_report_server'] = array(
+    'title' => 'Publisher Reporting',
+    'description' => 'Configuration settings for Pub Reports Server',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_report_server_api_key_generator_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Adds the report to the DB.
+ */
+function pub_report_server_add_report_api_v2() {
+  $raw_data = $_POST;
+
+  $site_name = isset($raw_data['site_name']) ? check_plain($raw_data['site_name']) : '';
+  $api_key = isset($raw_data['api_key']) ? check_plain($raw_data['api_key']) : '';
+  $admin_theme = isset($raw_data['admin_theme']) ? check_plain($raw_data['admin_theme']) : '';
+  $default_theme = isset($raw_data['default_theme']) ? check_plain($raw_data['default_theme']) : '';
+  $drupal_version = isset($raw_data['drupal_version']) ? check_plain($raw_data['drupal_version']) : '';
+  $publisher_version = isset($raw_data['publisher_version']) ? check_plain($raw_data['publisher_version']) : '';
+  $publisher_profile = isset($raw_data['publisher_profile']) ? check_plain($raw_data['publisher_profile']) : '';
+  // New API 2.0 data.
+  $api_version = isset($raw_data['api_version']) ? check_plain($raw_data['api_version']) : '';
+  $tabular_data = isset($raw_data['tabular_data']) ? $raw_data['tabular_data'] : '';
+  $module_versions = isset($raw_data['module_versions']) ? $raw_data['module_versions'] : '';
+
+  // Check the API key.
+  if (strlen($site_name) > 0 && strlen($api_key) > 0) {
+    if ($api_key == _pub_report_server_generate_site_api_key($site_name)) {
+      // Set the the last record field for previous report to 0
+      $query = new EntityFieldQuery();
+      $result = $query->entityCondition('entity_type', 'site_report', '=')
+        ->propertyCondition('last_report', '1', '=')
+        ->propertyCondition('site_name', $site_name, '=')
+        ->execute();
+
+      $entities = entity_load('site_report', array_keys($result['site_report']));
+      foreach ($entities as $k => $site_report) {
+        $site_report->last_report = 0;
+        $site_report->save();
+      }
+
+      // Process the new entity data.
+      $modules_string = '';
+      $modules_count = 0;
+      if (isset($raw_data['modules_array']) && is_array($raw_data['modules_array'])) {
+        $modules_array = $raw_data['modules_array'];
+        $modules_count = count($modules_array);
+        $modules_array = array_map(function($p) {return '(' . $p . ')';}, $modules_array);
+        $modules_string = check_plain(implode(',', $modules_array));
+      }
+
+      // Calculate the diff for modules so that we can store it and use in the
+      // views.
+      reset($entities);
+      if ($api_version == '2.0') {
+        $new_modules_arr = unserialize($module_versions);
+        $previous_modules_arr = !(current($entities)->module_versions) ? array() : unserialize(current($entities)->module_versions);
+        $module_versions_diff = pub_report_server_calculate_module_versions_diff($new_modules_arr, $previous_modules_arr);
+        $last_report_diff = array('module_versions' => $module_versions_diff);
+      }
+      else {
+        // Handle the diffs for API 1.0 data differently.
+        $new_modules_arr = array_flip($raw_data['modules_array']);
+        $com_str = preg_replace('/[()]/', '', current($entities)->modules);
+        $previous_modules_arr = !empty($com_str) ? array_flip(explode(',', $com_str)) : array();
+        foreach ($new_modules_arr as $k => $v) {
+          $new_modules_arr[$k] = t('N/A');
+        }
+        foreach ($previous_modules_arr as $k => $v) {
+          $previous_modules_arr[$k] = t('N/A');
+        }
+        $diff = pub_report_server_calculate_module_versions_diff($new_modules_arr, $previous_modules_arr);
+        $last_report_diff = array('module_versions' => $diff);
+      }
+
+      $input_data = array(
+        'site_name' => $site_name,
+        'modules' => $modules_string,
+        'module_versions' => $module_versions,
+        'modules_count' => $modules_count,
+        'admin_theme' => $admin_theme,
+        'last_report_diff' => serialize($last_report_diff),
+        'default_theme' => $default_theme,
+        'drupal_version' => $drupal_version,
+        'publisher_version' => $publisher_version,
+        'publisher_profile' => $publisher_profile,
+        'api_version' => $api_version,
+        'tabular_data' => serialize($tabular_data),
+        'time_sent' => time(),
+        'last_report' => 1,
+      );
+
+      // Save the entity.
+      $entity = entity_create('site_report', $input_data);
+      $report_saved = $entity->save();
+      if ($report_saved) {
+        echo drupal_json_encode(
+          array(
+            "status" => "success",
+            "message" => "Report saved.",
+          )
+        );
+      }
+      else {
+        // Instead of returning a generic 400 response we use the more specific
+        // 422 Unprocessable Entity code from RFC 4918. That way clients can
+        // distinguish between general syntax errors in bad serializations (code
+        // 400) and semantic errors in well-formed requests (code 422).
+        throw new HttpException(422, drupal_json_encode(
+            array(
+              "status" => "error",
+              "message" => "Unprocessable Entity: report not saved.",
+            )
+          )
+        );
+      }
+    }
+    else {
+      echo drupal_json_encode(
+        array(
+          "status" => "error",
+          "message" => "Invalid API key.",
+        )
+      );
+    }
+  }
+
+  die();
+}
+
+/**
+ * Calculate the diff between module versions.
+ *
+ * @param string $new
+ *   The new version.
+ *
+ * @param string $previous
+ *   The former version.
+ *
+ * @return array
+ *   An array of modules with their version information.
+ */
+function pub_report_server_calculate_module_versions_diff($new, $previous) {
+  if (!$previous || !is_array($previous) || !$new || !is_array($new)) {
+    return array(
+      'new_modules' => array(),
+      'previous_versions' => array(),
+      'deleted_modules' => array(),
+    );
+  }
+  $diff1 = array_diff_assoc($new, $previous);
+  $diff2 = array_diff_assoc($previous, $new);
+
+  $new_modules = array_diff_key($diff1, $previous);
+  $previous_versions = array_intersect_key($previous, $diff1);
+  $deleted_modules = array_diff_key($diff2, $new);
+
+  $result = array(
+    'new_modules' => $new_modules,
+    'previous_versions' => $previous_versions,
+    'deleted_modules' => $deleted_modules,
+  );
+  return $result;
+}
+
+/**
+ * Creates a form for API Key generator.
+ */
+function pub_report_server_api_key_generator_form($form, &$form_state) {
+  $form['site_name'] = array(
+    '#title' => t('Short Site Name'),
+    '#type' => 'textfield',
+    '#default_value' => '',
+  );
+  $form['submit_button'] = array(
+    '#type' => 'submit',
+    '#value' => t('Generate API Key'),
+  );
+  return $form;
+}
+
+/**
+ * Validates input from the API key generation form.
+ */
+function pub_report_server_api_key_generator_form_validate($form, &$form_state) {
+  if (empty($form_state['values']['site_name'])) {
+    form_set_error('site_name', t('Site name cannot be empty.'));
+  }
+}
+
+/**
+ * Handles submission of the API key generation form.
+ */
+function pub_report_server_api_key_generator_form_submit($form, &$form_state) {
+  drupal_set_message('API Key for "' . $form_state['values']['site_name'] . '": ' . _pub_report_server_generate_site_api_key($form_state['values']['site_name']), 'status');
+}
+
+/**
+ * Generates site's API Key based on site shortname.
+ */
+function _pub_report_server_generate_site_api_key($site_name) {
+  global $drupal_hash_salt;
+
+  $site_name = strtolower($site_name);
+  $key = sha1($site_name . '_' . $drupal_hash_salt);
+  return $key;
+}
+
+/**
+ * This function returns TRUE.
+ *
+ * @todo Delete this function ... it's useless. (And it's named incorrectly.)
+ */
+function sitereport_entity_access() {
+  return TRUE;
+}
+
+class SiteReportsEntity extends Entity {
+  /**
+   * {@inheritdoc}
+   */
+  protected function defaultUri() {
+    return array('path' => 'sitereport/' . $this->identifier());
+  }
+}
+
+/**
+ * Implements hook_services_resources().
+ */
+function pub_report_server_services_resources() {
+  return array(
+    'pub_report_services' => array(
+      'index' => array(
+        'help' => 'Retrieves a listing of sites',
+        'file' => array('file' => 'module', 'module' => 'pub_report_server'),
+        'callback' => '_pub_report_server_index',
+        'access callback' => 'user_access',
+        'access arguments' => array('access content'),
+        'args' => array(
+          array(
+            'name' => 'page',
+            'type' => 'int',
+            'description' => '',
+            'source' => array(
+              'param' => 'page',
+            ),
+            'optional' => TRUE,
+            'default value' => 0,
+          ),
+          array(
+            'name' => 'parameters',
+            'type' => 'array',
+            'description' => '',
+            'source' => 'param',
+            'optional' => TRUE,
+            'default value' => array(),
+            'test' => 'ack',
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+
+/**
+ * Callback for retrieving all sites.
+ *
+ * @return object
+ *   An object containing all site data.
+ */
+function _pub_report_server_index($page, $parameters) {
+  $sites = array();
+  // Get the most recent row of each site.
+  $res = db_query("SELECT b.* FROM (SELECT MAX(time_sent) AS max_time_sent FROM {pub_report_sites} GROUP BY site_name) a JOIN {pub_report_sites} b ON a.max_time_sent = b.time_sent ORDER BY b.time_sent DESC");
+  foreach ($res as $site) {
+    // Unserialize pre-db serialized data generically.
+    foreach ($site as $key => $value) {
+      $new_value = unserialize($value);
+      if ($new_value) {
+        $site->$key = $new_value;
+      }
+    }
+    $sites[] = $site;
+  }
+  return $sites;
+}

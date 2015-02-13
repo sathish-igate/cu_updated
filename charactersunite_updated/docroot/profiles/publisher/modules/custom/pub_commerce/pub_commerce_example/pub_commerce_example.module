@@ -1,0 +1,147 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Commerce Example feature.
+ */
+
+include_once 'pub_commerce_example.features.inc';
+
+/**
+ * @file
+ * Module file for Publisher Commerce Example.
+ */
+
+/**
+ * Implements hook_post_features_rebuild().
+ *
+ * Add taxonomies, products, and category menu after features are rebuilt. This
+ * is especially helpful for inflating the example store when features are
+ * rebuilt on module install.
+ */
+function pub_commerce_example_post_features_rebuild($component) {
+  if ($component == 'taxonomy') {
+    module_load_include('inc', 'pub_commerce_example', 'pub_commerce_example.install_functions');
+
+    $skus = pub_commerce_example_get_skus_array();
+    $vocabs = array('categories', 'color', 'size');
+
+    // Create vocabularies and their taxonomies.
+    foreach ($vocabs as $vocab) {
+      ${$vocab} = $vocab_arr = call_user_func('pub_commerce_example_get_' . $vocab . '_array');
+      // Create taxonomy terms.
+      $vocab_obj = taxonomy_vocabulary_machine_name_load($vocab);
+
+      $term_test = array();
+      foreach ($vocab_arr as $key => $value) {
+        $term_obj = (object) $value;
+        $term_obj->vid = $vocab_obj->vid;
+        $term_test[$key] = taxonomy_get_term_by_name($value->name, $vocab);
+        if (empty($term_test[$key])) {
+          // Get parent tid for sub-levels of nested taxonomy terms.
+          if (!empty($term_obj->parent)) {
+           $term_obj->parent = $term_test[$term_obj->parent]->tid;
+          }
+          taxonomy_term_save($term_obj);
+          // Store taxonomy term object after save in case it has a child in
+          // further iterations. We can get the tid from there since
+          // taxonomy_term_save() passes the tid to $term_obj by reference.
+          $term_test[$key] = $term_obj;
+        }
+      }
+    }
+
+    // Insert products.
+    foreach ($skus as $key => $value) {
+      call_user_func('pub_commerce_example_insert_example_product_' . $key, $key, $value, $categories, $color, $size);
+    }
+
+    // Add the categories-menu block to the Sidebar first region for all enabled
+    // themes.
+    $themes = list_themes();
+    foreach ($themes as $key => $value) {
+      if ($value->status) {
+        db_merge('block')
+          ->key(array('theme' => $key, 'module' => 'menu', 'delta' => 'categories-menu'))
+          ->fields(array(
+            'status' => 1,
+            'region' => 'sidebar_first',
+            'pages' => '',
+          ))
+          ->execute();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_commerce_example_menu_alter(&$items) {
+  // Unset redundant or misleading menu items. Redirect where appropriate.
+  foreach ($items as $path => $item) {
+    // Remove misleading menu link Admin -> Store -> Products -> Add a product.
+    // Ordinarily takes you to a page saying "You have not created any product
+    // types yet." This is wrong and this menu item needs to be removed.
+    if ($path == 'node/add/add-product') {
+      unset($items[$path]);
+    }
+    if (strpos($path, 'admin/commerce/products/add') !== FALSE) {
+      // Originally Admin -> Content -> Add content -> Product. Results in poor
+      // user experience because the menu link should be under Admin -> Store.
+      // Removing entirely.
+      if ($path == 'admin/commerce/products/add') {
+        unset($items[$path]);
+      }
+      // Admin -> Store -> Product -> Create product->type. Ordinarily redirects
+      // admin/commerce/products/add/product. That page is for inserting product
+      // variation entities only. Submitting the form there leaves the entity
+      // completely unattached to any product display. Most users have no need
+      // for that experience, and therefore, this link (correctly placed in
+      // Admin -> Store -> Product -> Create product->type) will redirect to
+      // node/add/product->type.
+      else {
+        $path_args = explode('/', $path);
+        if (!empty($path_args[4])) {
+          $items[$path]['page callback'] = 'pub_commerce_example_goto_nodeadd_page';
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_link_alter().
+ */
+function pub_commerce_example_menu_link_alter(&$item) {
+  // Remove add-product menu items from Content submenu.
+  if (strpos($item['link_path'], 'node/add/') !== FALSE) {
+    // Set $commerce_product_types as a Drupal static variable so the db only
+    // gets queried once and the retrieved data can be stored in memory.
+    $commerce_product_types = &drupal_static(__FUNCTION__);
+
+    if (!is_array($commerce_product_types)) {
+      // This db call should only happen on cache clear.
+      $sql = 'SELECT type FROM {commerce_product_type}';
+      $result = db_query($sql);
+      $commerce_product_types = array();
+      foreach ($result as $row) {
+        $commerce_product_types[] = $row->type;
+      }
+    }
+    foreach ($commerce_product_types as $type) {
+      if ($item['link_path'] == 'node/add/' . $type) {
+        $item['hidden'] = 1;
+      }
+    }
+  }
+}
+
+/**
+ * Callback function for menu item admin/commerce/products/add/product->type.
+ */
+function pub_commerce_example_goto_nodeadd_page($product) {
+  if (php_sapi_name() == 'cli' || preg_match('/\/cron.php$/', $_SERVER['SCRIPT_NAME']) || current_path() == 'admin/reports/status/run-cron') {
+    return FALSE;
+  }
+  drupal_goto('node/add/' . $product->type);
+}

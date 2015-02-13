@@ -1,0 +1,323 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Ads feature.
+ */
+
+include_once 'pub_ads.features.inc';
+
+/*
+ * NBC AdOps claims that no site needs more than three companion ads so just
+ * in case, we include five.
+ */
+define('PUB_ADS_VIDEO_COMPANION_AD_COUNT', 5);
+
+/**
+ * Implements hook_theme().
+ */
+function pub_ads_theme() {
+  return array(
+    'pub_ads_video_companion_ads_form' => array(
+      'render element' => 'form',
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function pub_ads_block_info() {
+  $blocks = array();
+
+  // Add video companion ads as blocks.
+  for ($i = 1; $i <= PUB_ADS_VIDEO_COMPANION_AD_COUNT; $i++) {
+    $id = variable_get('pub_ads_video_companion_ad_' . $i, '');
+
+    if (!empty($id)) {
+      $blocks[$id] = array(
+        'info' => t('Video Companion Ad - @id', array('@id' => $id)),
+        'cache' => DRUPAL_CACHE_GLOBAL,
+      );
+    }
+  }
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function pub_ads_block_view($delta) {
+  $found = FALSE;
+
+  // Check if the video companion ad specified by delta should be displayed.
+  for ($i = 1; $i <= PUB_ADS_VIDEO_COMPANION_AD_COUNT; $i++) {
+    if ($delta === variable_get('pub_ads_video_companion_ad_' . $i, '')) {
+      $found = TRUE;
+    }
+  }
+
+  if (!$found) {
+    return;
+  }
+
+  // Display the video companion ad for the specified delta.
+  $block = array(
+    'subject' => '',
+    'content' => array(
+      'div' => array(
+        '#theme_wrappers' => array('container'),
+        '#attributes' => array(
+          'id' => $delta,
+        ),
+      ),
+    ),
+  );
+
+  return $block;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_ads_menu_alter(&$items) {
+  // Add menu handling for the ads paths entered by the site admin.
+  $pub_ads_files = pub_ads_path_load_all();
+  // Note that "access callback" is intentionally set to TRUE.
+  $default_menu = array(
+    'page callback' => 'pub_ads_paths',
+    'delivery callback' => 'pub_ads_paths_delivery',
+    'access callback' => TRUE,
+    'description' => 'Generic callback for ad path loading.',
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($pub_ads_files as $machine_name => $pub_file) {
+    $path = $pub_file->path;
+    // We set up the name as the title and the machine name as the argument.
+    $items[$path] = array(
+      'title' => $pub_file->name,
+      'page arguments' => array($pub_file->machine_name),
+    );
+
+    // Now lets merge the default_menu settings.
+    $items[$path] += $default_menu;
+  }
+}
+
+/**
+ * @defgroup ads_paths Ads Paths
+ * @{
+ * Ads paths are needed when ad providers need XSS support.
+ *
+ * Ad paths are used when an ad provider (or something related) requires that we
+ * add a script to the site. This is usually done to handle legitimate uses of
+ * XSS.
+ * @}
+ */
+
+/**
+ * Delivery callback for our ads paths.
+ *
+ * We implement our own delivery callback to make sure we only render
+ * what we want.
+ *
+ * @ingroup ads_paths
+ */
+function pub_ads_paths_delivery($content) {
+  if (is_null(drupal_get_http_header('Content-Type'))) {
+    drupal_add_http_header('Content-Type', 'text/html; charset=utf-8');
+  }
+
+  // Print what we get back from $content.
+  print $content;
+
+  // Perform end-of-request tasks.
+  drupal_page_footer();
+}
+
+/**
+ * Generic menu callback for our paths.
+ *
+ * @ingroup ads_paths
+ */
+function pub_ads_paths($machine_name) {
+  $pub_file = pub_ads_path_load($machine_name);
+
+  if ($pub_file !== FALSE) {
+    switch ($pub_file->file_type) {
+      case 'html':
+        drupal_add_http_header('Content-Type', 'text/html; charset=utf-8');
+        break;
+
+      case 'js':
+        drupal_add_http_header('Content-Type', 'text/javascript; charset=utf-8');
+        break;
+
+      case 'json':
+        drupal_add_http_header('Content-Type', 'application/json; charset=utf-8');
+        break;
+
+      default:
+        drupal_add_http_header('Content-Type', 'text/html; charset=utf-8');
+        break;
+    }
+
+    return $pub_file->content;
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ *
+ * @ingroup ads_paths
+ */
+function pub_ads_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' && $plugin == 'export_ui') {
+    return 'plugins/' . $plugin;
+  }
+}
+
+/**
+ * Implements 'load callback' for pub_ads_paths exportables.
+ *
+ * @ingroup ads_paths
+ */
+function pub_ads_path_load($name) {
+  ctools_include('export');
+  $result = ctools_export_load_object('pub_ads_paths', 'names', array($name));
+  if (isset($result[$name])) {
+    return $result[$name];
+  }
+  return FALSE;
+}
+
+/**
+ * Implements 'load callback' for pub_ads_paths exportables.
+ *
+ * @ingroup ads_paths
+ */
+function pub_ads_path_load_all() {
+  ctools_include('export');
+  $result = ctools_export_load_object('pub_ads_paths');
+  return $result;
+}
+
+/**
+ * @} End of "defgroup ads_paths".
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_ads_form_dart_admin_settings_alter(&$form, &$form_state) {
+  _pub_ads_tag_module_settings_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_ads_form_dfp_admin_settings_alter(&$form, &$form_state) {
+  _pub_ads_tag_module_settings_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_ads_form_mps_admin_settings_alter(&$form, &$form_state) {
+  _pub_ads_tag_module_settings_alter($form, $form_state);
+}
+
+/**
+ * Generic form alter function.
+ *
+ * @see pub_ads_form_dart_admin_settings_alter
+ * @see pub_ads_form_dfp_admin_settings_alter
+ * @see pub_ads_form_mps_admin_settings_alter
+ */
+function _pub_ads_tag_module_settings_alter(&$form, &$form_state) {
+  $form['video_companion_ads'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Video Companion Ads'),
+    '#group' => 'settings',
+    '#description' => t('The video companion ads defined below will be available as <a href="@url">blocks</a>.', array('@url' => '/admin/structure/block')),
+  );
+  $form['video_companion_ads']['video_companion_ads_wrapper'] = array(
+    '#theme' => 'pub_ads_video_companion_ads_form',
+    '#theme_wrappers' => array('container'),
+    '#attributes' => array(
+      'id' => 'video_companion_ads_wrapper',
+    ),
+  );
+  for ($i = 1; $i <= PUB_ADS_VIDEO_COMPANION_AD_COUNT; $i++) {
+    $form['video_companion_ads']['video_companion_ads_wrapper']['pub_ads_video_companion_ad_' . $i] = array(
+      '#type' => 'textfield',
+      '#maxlength' => 32,
+      '#title' => t('Video Companion Ad @i', array('@i' => $i)),
+      '#description' => t("Enter the video companion ad ID provided by NBCU's AdOps. Leave the field blank if you do not need another video companion ad."),
+      '#default_value' => variable_get('pub_ads_video_companion_ad_' . $i, ''),
+    );
+  }
+
+  $form['#validate'][] = 'pub_ads_form_admin_settings_validate';
+}
+
+/**
+ * Validation function for the DART or DFP settings page.
+ */
+function pub_ads_form_admin_settings_validate($form, &$form_state) {
+  $existing_values = array();
+  for ($i = 1; $i <= PUB_ADS_VIDEO_COMPANION_AD_COUNT; $i++) {
+    $existing_value = variable_get('pub_ads_video_companion_ad_' . $i, '');
+
+    // If the field is empty but it used to have a value, throw an error.
+    if (empty($form_state['values']['pub_ads_video_companion_ad_' . $i]) && $form_state['values']['pub_ads_video_companion_ad_' . $i] !== $existing_value) {
+      form_set_error('pub_ads_video_companion_ad_' . $i, t('You cannot remove an existing video companion ad ID. The previous value of video companion ad id @num was: @value', array('@num' => $i, '@value' => $existing_value)));
+    }
+    // If the field is not empty and it is not a valid HTML id, throw an error.
+    if (!empty($form_state['values']['pub_ads_video_companion_ad_' . $i]) && !preg_match('/^([A-Za-z]){1}([A-Za-z0-9-_.\:])+$/', $form_state['values']['pub_ads_video_companion_ad_' . $i])) {
+      form_set_error('pub_ads_video_companion_ad_' . $i, t('Video companion ad ids must be valid HTML ids; they must begin with a letter and contain only letters, numbers, hyphens(-), underscores(_), colons(:) and periods(.).'));
+    }
+    // If the field is not empty but the new value has already been used.
+    if (!empty($form_state['values']['pub_ads_video_companion_ad_' . $i]) && in_array(strtolower($form_state['values']['pub_ads_video_companion_ad_' . $i]), $existing_values)) {
+      form_set_error('pub_ads_video_companion_ad_' . $i, t('You cannot set two Video Companion Ad IDs to the same value.'));
+    }
+
+    // If the new value is not empty, add it to the $existing_values list.
+    if (!empty($form_state['values']['pub_ads_video_companion_ad_' . $i])) {
+      $existing_values[] = strtolower($form_state['values']['pub_ads_video_companion_ad_' . $i]);
+    }
+  }
+}
+
+/**
+ * Theme function for the video companion ad form.
+ */
+function theme_pub_ads_video_companion_ads_form($variables) {
+  $form = &$variables['form'];
+
+  $rows = array();
+  $headers = array(
+    t('Video Companion Ad Id'),
+  );
+
+  foreach (element_children($form) as $key) {
+    // Only print the description on the last form element.
+    if ($key !== 'pub_ads_video_companion_ad_' . PUB_ADS_VIDEO_COMPANION_AD_COUNT) {
+      unset($form[$key]['#description']);
+    }
+
+    // Build the table row.
+    $row = array(
+      'data' => array(
+        array(
+          'data' => drupal_render($form[$key]),
+        ),
+      ),
+    );
+
+    $rows[] = $row;
+  }
+
+  return theme('table', array('header' => $headers, 'rows' => $rows));
+}

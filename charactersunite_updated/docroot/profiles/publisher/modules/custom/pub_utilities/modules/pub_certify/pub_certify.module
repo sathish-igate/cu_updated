@@ -1,0 +1,197 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function pub_certify_menu() {
+  $items['admin/utilities/certify_branch'] = array(
+    'title' => 'Certify Branch',
+    'description' => 'Certify a code branch and create a pull request.',
+    'page callback' => 'pub_certify_admin_page',
+    'access arguments' => array('use publisher utilities'),
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback including the certify form as well as the certification log.
+ *
+ * @return array
+ *   An associative array with information about the admin page.
+ */
+function pub_certify_admin_page() {
+  $form = drupal_get_form('pub_certify_certify_form');
+
+  $content = array(
+    'form' => $form,
+    'log' => array(
+      '#theme' => 'table',
+      '#header' => array(t('User'), t('Date'), t('Repository'), t('Branch')),
+      '#rows' => pub_certify_log_entries(),
+      '#caption' => t('Certification Log'),
+      '#sticky' => TRUE,
+      '#attributes' => array(
+        'id' => 'certify_log',
+      ),
+    ),
+    '#attached' => array(
+      'css' => array(drupal_get_path('module', 'pub_certify') . '/pub_certify.css'),
+    ),
+  );
+
+  return $content;
+}
+
+/**
+ * Form builder for the mush and push tool.
+ */
+function pub_certify_certify_form($form, &$form_state) {
+  $pub_core_repo_name = variable_get('pub_utilities_github_pubcore_repo_name', '');
+  $site_names = publisher_utilities_sites();
+
+  // Build a list of sources.
+  $source = isset($form_state['values']['source']) ? $form_state['values']['source'] : '';
+  $sources = array_merge(array('Publisher7 Core'), $site_names);
+
+  // Build a list of repositories.
+  $repository = isset($form_state['values']['repository']) ? $form_state['values']['repository'] : '';
+  $repositories = array();
+  if ($source == 'Publisher7 Core') {
+    $repositories = _pub_utilities_github_get_forks($pub_core_repo_name);
+  }
+  elseif (in_array($source, $site_names)) {
+    $repositories = _pub_utilities_github_get_forks($pub_core_repo_name . '_' . $source);
+  }
+
+  // Build a list of branches.
+  $branches = array();
+  if (!empty($repository)) {
+    $branches = _pub_utilities_github_get_refs('branches', $repositories[$repository]->owner->login, $repositories[$repository]->name);
+  }
+
+  $form = array(
+    '#attributes' => array(
+      'id' => 'certify_form',
+      'class' => array('clearfix'),
+    ),
+  );
+  $form['source'] = array(
+    '#type' => 'select',
+    '#title' => t('Source'),
+    '#options' => drupal_map_assoc($sources),
+    '#required' => TRUE,
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_certify_certify_form_ajax_callback',
+      'wrapper' => 'certify_form',
+    ),
+  );
+  $form['repository'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($repositories)),
+    '#title' => t('Repository'),
+    '#required' => TRUE,
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_certify_certify_form_ajax_callback',
+      'wrapper' => 'certify_form',
+    ),
+    '#empty_option' => empty($source) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="source"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+  $form['branch'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($branches)),
+    '#title' => t('Branch'),
+    '#required' => TRUE,
+    '#empty_option' => empty($repository) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="repository"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Certify Branch'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit function for the Certify Branch Form.
+ */
+function pub_certify_certify_form_submit($form, $form_state) {
+  // Use the GitHub API to create a pull request.
+  _pub_utilities_github_pull_request($form_state['values']['repository'], $form_state['values']['branch']);
+
+  // Log this certificaion.
+  pub_certify_log($form_state['values']['repository'], $form_state['values']['branch']);
+}
+
+/**
+ * Adds a record to the pub_certify_log.
+ *
+ * @param string $repository
+ *   The name of the repository containing the branch being certified.
+ * @param string $branch
+ *   The name of the branch being certified.
+ *
+ * @return bool
+ *   The result (success or failure) of writing a DB record.
+ */
+function pub_certify_log($repository, $branch) {
+  global $user;
+
+  $record = array(
+    'uid' => $user->uid,
+    'timestamp' => time(),
+    'repository' => $repository,
+    'branch' => $branch,
+  );
+
+  drupal_write_record('pub_certify_log', $record);
+}
+
+/**
+ * Get the entries from the certification log.
+ *
+ * @return array
+ *   An array of all the log entries as associative arrays.
+ */
+function pub_certify_log_entries() {
+  $entries = array();
+
+  $select = db_select('pub_certify_log', 'pcl');
+  $select->join('users', 'u', 'pcl.uid = u.uid');
+  $select->fields('pcl');
+  $select->addField('u', 'name');
+  $select->orderBy('pcl.timestamp', 'DESC');
+  $results = $select->execute()->fetchAll();
+
+  foreach ($results as $entry) {
+    $entries[] = array(
+      l($entry->name, 'user/' . $entry->uid),
+      format_date($entry->timestamp, 'long'),
+      l($entry->repository, 'http://github.com/' . $entry->repository),
+      $entry->branch,
+    );
+  }
+
+  return $entries;
+}
+
+/**
+ * Callback function refreshes the Certify Branch form.
+ */
+function _pub_certify_certify_form_ajax_callback($form, $form_state) {
+  return $form;
+}
+

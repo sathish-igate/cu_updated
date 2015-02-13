@@ -1,0 +1,31 @@
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the pub_character_profile module.
+ */
+
+/**
+ * Revert Feature on update. Sets Birthdate field to blank and adds Alias help
+ * text.
+ */
+function pub_character_profile_update_7000() {
+  // The features_revert() needs this to happen or it won't revert on db update.
+  drupal_flush_all_caches();
+
+  // We need to delete manually delete the old field from the DB that we deleted
+  // from the Feature because Features won't.
+  if (field_info_field('field_character_external_urls')) {
+    field_delete_field('field_character_external_urls');
+    field_purge_batch(1000);
+  }
+}
+
+/**
+ * Revert features.
+ */
+function pub_character_profile_update_7001() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_character_profile'));
+}

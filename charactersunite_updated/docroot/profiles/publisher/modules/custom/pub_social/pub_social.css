@@ -1,0 +1,4 @@
+/* Keep the specificity at a 23 or higher, anything less and it won't work.*/
+form.pub-social-share-form div.fieldset-wrapper label {
+  float: none;
+}

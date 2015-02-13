@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Composer post-update/install script that places the containing codetree
+# into the docroot, ensuring that certain paths are unchanged.
+
+# Derive the path from cwd to the root of the P7 vendor repo. This should
+# always be vendor/nbcuots/publisher7, but better not to assume.
+SRC=$(echo $(dirname "${BASH_SOURCE[0]}") | rev | cut -d"/" -f2- | rev)
+
+# Preserve selected files under the docroot in a tmp location.
+if [ -d "docroot" ]; then
+  EXISTS=1
+  TMPDIR=$(mktemp -d /tmp/pub-build.XXXXXXX) || { echo "Failed to create temp file"; exit 1; }
+
+  # Assume the first multisite has the same perms as any other multisite dirs.
+  FIRSTMULTI=`find docroot/sites/* -maxdepth 0 -type d -not -name 'all' -not -name 'example' | cut -c15- | head -1`
+  [ `uname` = "Darwin" ] && PERMS=$(stat -f %Mp%Lp docroot/sites/$FIRSTMULTI) || PERMS=$(stat -c "%a %n" docroot/sites/$FIRSTMULTI) # OMG, I hate non-GNU toolchains.
+  for MULTISITE in `find docroot/sites/* -maxdepth 0 -type d -not -name 'all' -not -name 'example'`; do
+    chmod 0755 $MULTISITE
+  done
+
+  cp -pPR docroot/robots.txt docroot/.htaccess docroot/sites $TMPDIR/
+  rm -rf docroot
+fi
+
+# Copy the vendor docroot into place.
+rsync -aq --delete --include='sites/all' --exclude='sites/*' $SRC/docroot/ docroot
+# Remove the git dir.
+rm -rf docroot/.git
+
+# Restore preserved files to their original location.
+if [ $EXISTS ]; then
+  rsync -aq $TMPDIR/ docroot/
+  rm -rf $TMPDIR
+
+
+  for MULTISITE in `find docroot/sites/* -maxdepth 0 -type d -not -name 'all' -not -name 'example'`; do
+    # Chmod multisite dirs back to what they were before.
+    chmod $PERMS $MULTISITE
+  done
+fi
+
+# simplesmlphp Library
+# Make sure we also keep the simplesamlphp outside of docroot.
+rsync -aq --delete $SRC/simplesamlphp/ simplesamlphp

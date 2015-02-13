@@ -1,0 +1,494 @@
+<?php
+/**
+ * @file
+ * Code for the Pub SSO feature.
+ */
+
+define('PUB_SSO_DEFAULT_PASSWORD_CHANGE_URL', 'https://sso.external.stg.nbcuni.com/nbcucentral/jsp/pwchange.jsp');
+
+/**
+ * Implements hook_menu().
+ */
+function pub_sso_menu() {
+  $items = array();
+
+  $items['sso'] = array(
+    'title' => 'Log on to the site',
+    'description' => 'Provides a site login page',
+    'page callback' => 'simplesamlphp_auth_loginpage',
+    'access callback' => '_simplesamlphp_auth_isEnabled',
+    'file' => 'simplesamlphp_auth.pages.inc',
+    'file path' => drupal_get_path('module', 'simplesamlphp_auth'),
+    'type' => MENU_CALLBACK,
+  );
+
+  if (variable_get('pub_sso_allow_deactivate_page', FALSE)) {
+    $items['sso/deactivate'] = array(
+      'title' => 'Deactivate SimpleSAML',
+      'description' => 'Provides a page for deactivating the SimpleSAML functionality if the user is logged out.',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('pub_sso_deactivate_page'),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_sso_menu_alter(&$items) {
+  $items['user']['page callback'] = 'pub_sso_loginpage';
+}
+
+/**
+ * Redirects user to appropriate login / profile page.
+ */
+function pub_sso_loginpage() {
+  global $user;
+
+  if ($user->uid) {
+    // Get the user's profile page.
+    menu_set_active_item('user/' . $user->uid);
+    return menu_execute_active_handler(NULL, FALSE);
+  }
+  elseif (_simplesamlphp_auth_isEnabled() && pub_sso_display_sso_only_mode()) {
+    // Get the Simple SAML login page.
+    module_load_include('inc', 'simplesamlphp_auth', 'simplesamlphp_auth.pages');
+    return simplesamlphp_auth_loginpage();
+  }
+  else {
+    // Get the Drupal login form.
+    return drupal_get_form('user_login');
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter.
+ *
+ * Ensures form_alter hooks of pub_sso are called after simplesamlphp_auth.
+ */
+function pub_sso_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'form_alter') {
+    if (isset($implementations['pub_sso'])) {
+      unset($implementations['pub_sso']);
+    }
+    $implementations['pub_sso'] = false;
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Add additional validation handler for user_login forms.
+ */
+function pub_sso_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'user_login_block':
+    case 'user_login':
+      $form['#validate'][] = 'pub_sso_user_login_validate';
+  }
+}
+
+/**
+ * Additional validation handler for user_login forms.
+ *
+ * Prevents an SSO user from logging in via Drupal login form.
+ *
+ * @see user_login()
+ * @see user_login_block()
+ */
+function pub_sso_user_login_validate($form, &$form_state) {
+  $account = user_load_by_name(check_plain($form_state['values']['name']));
+  if ($account) {
+    $sso_roles = variable_get('pub_sso_roles_that_authenticate', array());
+    $roles = array_intersect_key($sso_roles, $account->roles);
+    if (!empty($roles)) {
+      // This user is supposed to login with SSO.
+      form_set_error('name', t('Please login with your SSO. !clickhere to be redirected to the SSO login page.',
+          array('!clickhere' => l(t('Click here'), 'saml_login')))
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_sso_form_simplesamlphp_auth_settings_alter(&$form, &$form_state) {
+  // This is tough for users to determine, provide the default for them.
+  $simplesamlphp_installdir = str_replace('docroot', 'simplesamlphp', DRUPAL_ROOT);
+  $installdir_title = $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_installdir']['#title'];
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_installdir']['#title'] = str_replace('/var/simplesamlphp', $simplesamlphp_installdir, $installdir_title);
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_installdir']['#default_value'] = $simplesamlphp_installdir;
+
+  // Determine the authentication source for this domain.
+  include_once DRUPAL_ROOT . '/' . conf_path() . '/sso/domains.inc';
+
+  if (array_key_exists($_SERVER['SERVER_NAME'], $domains)) {
+    $simplesamlphp_authsource = $domains[$_SERVER['SERVER_NAME']];
+    $authsource_title = $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_authsource']['#title'];
+    $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_authsource']['#title'] = str_replace('default-sp', $simplesamlphp_authsource, $authsource_title);
+    $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_authsource']['#default_value'] = $simplesamlphp_authsource;
+  }
+
+  $form['simplesamlphp_auth_grp_setup']['pub_sso_server'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SSO Server'),
+    '#default_value' => variable_get('pub_sso_server', 'stage'),
+    '#description' => t("You can change this value by setting \$conf['pub_sso_server'] in your settings.php to either 'stage' or 'prod'."),
+    '#disabled' => TRUE,
+  );
+
+  if (file_exists(pub_sso_get_cert_file())) {
+    $upload_description = t('A certificate exists for this instance of SimpleSAMLphp.');
+  }
+  else {
+    $upload_description = t('You do not have a certificate applied.');
+  }
+
+  $form['#attributes']['enctype'] = 'multipart/form-data';
+  $form['simplesamlphp_auth_grp_setup']['cert']['file_upload'] = array(
+    '#title' => t('Upload certificate'),
+    '#type'  => 'file',
+    '#description'  => $upload_description,
+  );
+
+  // Disable set-up fields that have had values pre-supplied.
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_installdir']['#disabled'] = TRUE;
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_authsource']['#disabled'] = TRUE;
+
+  // Move HTTPS checkbox to bottom of section and lock it from user editing.
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_forcehttps']['#weight'] = 10;
+  $form['simplesamlphp_auth_grp_setup']['simplesamlphp_auth_forcehttps']['#disabled'] = TRUE;
+
+  // Set up defaults based upon values passed to us by SSO process.
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_user_name']['#default_value'] = 'email';
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_user_name']['#disabled'] = TRUE;
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_unique_id']['#default_value'] = 'email';
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_unique_id']['#disabled'] = TRUE;
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_mailattr']['#default_value'] = 'email';
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_mailattr']['#disabled'] = TRUE;
+
+  // Hide auto enable SAML.
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_autoenablesaml']['#access'] = FALSE;
+
+  // Hide the User Provisioning fieldset.
+  $form['simplesamlphp_auth_grp_reg']['simplesamlphp_auth_registerusers']['#default_value'] = 0;
+  $form['simplesamlphp_auth_grp_reg']['#access'] = FALSE;
+
+  // Role based SAML login
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowdefaultloginroles']['#access'] = FALSE;
+  $user_roles = pub_sso_determine_selectable_user_roles();
+  $default_values = variable_get('pub_sso_roles_that_authenticate', NULL);
+  if (is_null($default_values)) {
+    // Default anything but an authenticated user.
+    $default_values = array();
+    foreach ($user_roles as $key => $role) {
+      if ($key != DRUPAL_AUTHENTICATED_RID) {
+        $default_values[] = $key;
+      }
+    }
+  }
+  $form['simplesamlphp_auth_grp_user']['roles_that_authenticate'] = array(
+    '#title' => t('Roles that are required to authenticate with SSO'),
+    '#type'  => 'checkboxes',
+    '#options' => $user_roles,
+    '#default_value' => $default_values,
+    '#description' => t('By checking "Authenticated User", ALL users will be forced to login via SSO. <strong>Warning: In that case you may be logged out when you save this form.</strong>'),
+  );
+
+  // Do not allow SAML users to set Drupal passwords.
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowsetdrupalpwd']['#default_value'] = 0;
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowsetdrupalpwd']['#access'] = FALSE;
+
+  // Hide automatic role population fields.
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_rolepopulation']['#access'] = FALSE;
+  $form['simplesamlphp_auth_grp_user']['simplesamlphp_auth_roleevaleverytime']['#access'] = FALSE;
+
+  // Hide Drupal authentication fieldset.
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowdefaultloginusers']['#access'] = FALSE;
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowdefaultlogin']['#access'] = FALSE;
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_logoutgotourl']['#access'] = FALSE;
+  $form['simplesamlphp_auth_grp_auth']['#access'] = FALSE;
+
+  // Warn about user 1 being locked out.
+  $form['simplesamlphp_auth_grp_auth']['simplesamlphp_auth_allowdefaultloginusers']['#description'] =
+    t("A comma-separated list of user IDs that should be allowed to login without SAML. ".
+      "<strong>Warning</strong>: You might want to add '1' to ensure admin user continues to have access to the site");
+
+  // Add the submit handler.
+  $form['#submit'][] = 'pub_sso_simplesamlphp_auth_form_submit';
+}
+
+/**
+ * Implements hook_form_submit().
+ */
+function pub_sso_simplesamlphp_auth_form_submit($form, &$form_state) {
+  $sso_roles = array_filter($form_state['values']['roles_that_authenticate']);
+  variable_set('pub_sso_roles_that_authenticate', $sso_roles);
+
+  // Handle hidden / disabled fields in the form.
+  // Do not create Drupal users on successful SSO login.
+  variable_set('simplesamlphp_auth_registerusers', 0);
+
+  // Automatically create authmap for users logging in via SSO.
+  variable_set('simplesamlphp_auth_autoenablesaml', 1);
+
+  // Prevent Drupal users from logging in based on user id.
+  variable_set('simplesamlphp_auth_allowdefaultloginusers', '');
+
+  // Determine local Drupal login settings.
+  $all_roles = pub_sso_determine_selectable_user_roles();
+  if (isset($sso_roles[DRUPAL_AUTHENTICATED_RID])) {
+    // SSO only mode.
+    variable_set('simplesamlphp_auth_allowdefaultlogin', 0);
+    variable_set('simplesamlphp_auth_allowdefaultloginroles', array());
+  }
+  else {
+    // Mixed authentication mode.
+    variable_set('simplesamlphp_auth_allowdefaultlogin', 1);
+    $drupal_roles = array_keys(array_diff_key($all_roles, $sso_roles));
+    variable_set('simplesamlphp_auth_allowdefaultloginroles', array_combine($drupal_roles, $drupal_roles));
+  }
+
+  $target_path = pub_sso_get_cert_file();
+
+  // If we already have a cert and the user didn't supply another, don't go
+  // through the save process.
+  if (file_exists($target_path) && empty($_FILES['files']['tmp_name']['file_upload'])) {
+    return;
+  }
+
+  $upload_result = move_uploaded_file($_FILES['files']['tmp_name']['file_upload'], $target_path);
+  if (!$upload_result) {
+    form_set_error('simplesamlphp_auth', t("Failed to save the file."));
+  }
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function pub_sso_block_view_alter(&$data, $block) {
+  if (_simplesamlphp_auth_isEnabled() && pub_sso_display_sso_only_mode()) {
+    if ($block->module === 'user' && $block->delta === 'login') {
+      $block->visibility = 0;
+      $data['content'] = FALSE;
+    }
+    if ($block->module === 'simplesamlphp_auth' && is_array($data)) {
+      if (user_is_logged_in()) {
+        $block->visibility = 0;
+      }
+      else {
+        $data['content'] = '<p>' . l(t('Log in with your SSO'), 'saml_login') . '</p>';
+      }
+    }
+  }
+  else {
+    if ($block->module === 'user' && $block->delta === 'login') {
+      $block->visibility = 1;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @see pub_sso_form_user_register_validate
+ * @see pub_sso_form_user_register_submit
+ */
+function pub_sso_form_user_register_form_alter(&$form, &$form_state) {
+
+  // Remove SAML authentication checkbox.
+  $form['saml']['#access'] = FALSE;
+  array_unshift($form['#submit'], 'pub_sso_form_user_register_submit');
+
+  // Only modify these fields if SimpleSAML is enabled and all users must log
+  // in as SSO users.
+  if (_simplesamlphp_auth_isEnabled() && pub_sso_display_sso_only_mode()) {
+    $form['account']['name']['#access'] = FALSE;
+    $form['account']['name']['#required'] = FALSE;
+
+    $form['account']['mail']['#weight'] = -10;
+
+    $form['account']['pass']['#access'] = FALSE;
+    $form['account']['pass']['#required'] = FALSE;
+
+    array_unshift($form['#validate'], 'pub_sso_form_user_register_validate');
+  }
+}
+
+/**
+ * Validation handler for the user register form.
+ *
+ * @see pub_sso_form_user_register_form_alter
+ */
+function pub_sso_form_user_register_validate($form, &$form_state) {
+  // Set the username to the email address, prior to user validation.
+  $form_state['values']['name'] = $form_state['values']['mail'];
+}
+
+/**
+ * Additional submission handler for user register form.
+ *
+ * @see pub_sso_form_user_register_form_alter
+ * @see simplesaml_auth_user_profile_form_submit
+ */
+function pub_sso_form_user_register_submit($form, &$form_state) {
+  // If user role requires SSO login, add back saml. This will cause
+  // simplesamlphp_auth to set up authmap for the user.
+  $sso_roles = variable_get('pub_sso_roles_that_authenticate', array());
+  $user_roles = array_filter($form_state['values']['roles']);
+  if (count(array_intersect_key($sso_roles, $user_roles)) > 0) {
+    $form_state['values']['saml'] = 1;
+  }
+  else {
+    $form_state['values']['saml'] = 0;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_sso_form_user_profile_form_alter(&$form, &$form_state) {
+  global $user;
+
+  // Remove SAML authentication checkbox.
+  $form['saml']['#access'] = FALSE;
+  $form['#submit'] = array_diff($form['#submit'], array('simplesaml_auth_user_profile_form_submit'));
+
+  // Stop altering profile form in case of regular Drupal users.
+  $account = user_load($form['#user']->uid);
+  if (!_simplesamlphp_auth_isEnabled() || !pub_sso_should_user_login_with_sso($account)) {
+    return;
+  }
+
+  // Disable Username and E-mail address textboxes.
+  $form['account']['name']['#disabled'] = TRUE;
+  $form['account']['mail']['#disabled'] = TRUE;
+  $form['account']['mail']['#weight'] = -8;
+
+  // Show change password link for SSO users (do not show for administrators).
+  if ($user->uid == $account->uid) {
+    $password_url = variable_get('pub_sso_password_reset', PUB_SSO_DEFAULT_PASSWORD_CHANGE_URL);
+    $password_link = l(t('Change your password'), $password_url, array(
+      'attributes' => array(
+          'target' => 'blank',
+      ),
+    ));
+    $form['account']['change_password'] = array(
+      '#markup' => $password_link,
+      '#weight' => -5,
+    );
+  }
+
+}
+
+/**
+ * Implements hook_user_presave().
+ */
+function pub_sso_user_presave(&$edit, $account, $category) {
+  if (!_simplesamlphp_auth_isEnabled()) {
+    return;
+  }
+
+  $edit['data'] = array(
+    'pub_sso' => array(),
+  );
+
+  module_load_include('inc', 'simplesamlphp_auth');
+  $saml_attributes = simplesamlphp_auth_get_attributes();
+  if (isset($saml_attributes['FirstName'])) {
+    $edit['data']['pub_sso']['FirstName'] = $saml_attributes['FirstName'];
+  }
+  if (isset($saml_attributes['LastName'])) {
+    $edit['data']['pub_sso']['LastName'] = $saml_attributes['LastName'];
+  }
+}
+
+/**
+ * Create the form for deactivating SimpleSAML.
+ */
+function pub_sso_deactivate_page($form, &$form_state) {
+  if (variable_get('simplesamlphp_auth_activate', FALSE)) {
+    $form['deactivate_button'] = array(
+      '#type' => 'submit',
+      '#value' => t('Deactivate'),
+    );
+  }
+  else {
+    drupal_set_message('The SimpleSAML module is deactivated.');
+    drupal_goto('<front>');
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for the deactivate page.
+ *
+ * @see pub_sso_deactivate_page()
+ */
+function pub_sso_deactivate_page_submit($form, &$form_state) {
+  variable_set('simplesamlphp_auth_activate', FALSE);
+}
+
+/**
+ * A utility function for determining where SSO certificates should be stored.
+ */
+function pub_sso_get_cert_directory() {
+  // We need to find a directory we can write the certificate to.
+  $files_private_directory = variable_get('file_private_path', FALSE);
+  if (!empty($files_private_directory) && is_writable($files_private_directory)) {
+    return $files_private_directory . '/sso_cert';
+  }
+  return FALSE;
+}
+
+/**
+ * Gets certificate file name.
+ *
+ * @return string
+ *   The certificate file name.
+ */
+function pub_sso_get_cert_file() {
+  $pub_sso_server = variable_get('pub_sso_server', 'stage');
+  return pub_sso_get_cert_directory() . '/' . $pub_sso_server . '.sso.crt';
+}
+
+/**
+ * A utility function for determining which user roles are able to sign in
+ * with SSO.
+ */
+function pub_sso_determine_selectable_user_roles() {
+  $user_roles = array();
+
+  foreach (user_roles() as $role_id => $role) {
+    if (strpos($role, 'anonymous') !== FALSE) {
+      continue;
+    }
+    $user_roles[$role_id] = ucwords($role);
+  }
+
+  return $user_roles;
+}
+
+/**
+ * A utility function for determining whether or not we should just display
+ * forms, etc. in SSO mode.
+ *
+ * There are situations where admin-type users log in with SSO while site users
+ * log in with their Drupal logins.  That condition would yield FALSE, below.
+ */
+function pub_sso_display_sso_only_mode() {
+  return !variable_get('simplesamlphp_auth_allowdefaultlogin', TRUE);
+}
+
+/**
+ * Determines whether the supplied user should log in with SSO.
+ */
+function pub_sso_should_user_login_with_sso($account) {
+  return _simplesaml_auth_user_has_authmap($account->mail);
+}

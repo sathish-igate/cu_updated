@@ -1,0 +1,10 @@
+name = Entity Tracker
+description = Tracks modifications to entities by selected user roles.
+core = 7.x
+
+configure = admin/config/content/entity_tracker
+
+dependencies[] = state_machine
+dependencies[] = devel
+
+files[] = tests/entity_tracker.test

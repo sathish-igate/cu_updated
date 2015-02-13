@@ -1,0 +1,6 @@
+name = Publisher News
+core = 7.x
+package = Publisher Feature Sets
+dependencies[] = pub_media
+dependencies[] = simple_exif
+dependencies[] = pub_mpx

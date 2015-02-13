@@ -1,0 +1,402 @@
+.content-top .billboard {
+  background: url("../img/unite-against-bullying/billboard.png") repeat scroll 0 0 #000000;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  box-shadow: 0 0 14px rgba(50, 50, 0, 0.64);
+  height: 100%;
+  margin: 0 auto;
+  width: 878px;
+}
+.content-mid-header {
+  color: #FFFFFF;
+	font-family: montserrat;
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: -1px;
+  line-height: 34px;
+  margin-bottom: 13px;
+  margin-top: -13px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.content .video-box {
+  height: 298px;
+  position: relative;
+  width: 405px;
+  z-index: 0;
+}
+.content .trip-win {
+  height: 283px;
+  margin-left: 425px;
+  width: 440px;
+}
+.trip-win h1 {
+font-weight: bold;
+text-transform: uppercase;
+color: #fff;
+font-size: 22px;
+line-height: 24px;
+width: 300px;
+margin-top: 0;
+}
+.trip-win p {
+color: #fff;
+font-weight: 100;
+font-size: 20px;
+width: 420px;
+line-height: 32px;
+}
+.trip-win-header {
+  font-family: cantarell !important;
+  font-size: 13px !important;
+  font-weight: bold !important;
+  letter-spacing: -1px;
+}
+.content-mid .trip {
+	background: none repeat scroll 0 0 #E5531A;
+	box-shadow: 0 0 14px rgba(50, 50, 0, 0.64);
+	height: 330px;
+	margin: 0 auto;
+	width: 904px;
+}
+.nt-sweep {
+	height: 34px;
+	margin-left: 125px;
+	margin-top: 2px;
+	width: 193px;
+}
+.content-bottom {
+	background-color: #000000;
+	margin-top: -9px;
+	margin-left: 60px;
+	margin-bottom: 55px;
+	min-height: 700px;
+	width: 878px;
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px
+}
+.content-bottom .social-section {
+width: 878px;
+height: 100%;
+background: #000;
+margin: 0 auto;
+-webkit-border-bottom-right-radius: 4px;
+-webkit-border-bottom-left-radius: 4px;
+-moz-border-radius-bottomright: 4px;
+-moz-border-radius-bottomleft: 4px;
+border-bottom-right-radius: 4px;
+border-bottom-left-radius: 4px;
+-webkit-box-shadow: 0px 0px 14px rgba(50, 50, 0, 0.64);
+-moz-box-shadow: 0px 0px 14px rgba(50, 50, 0, 0.64);
+box-shadow: 0px 0px 14px rgba(50, 50, 0, 0.64);
+}
+.social-section-left {
+width: 469px;
+height: 230px;
+}
+.unite-text {
+width: 469px;
+height: 125px;
+padding-left: 33px;
+padding-top: 22px;
+}
+h2 {
+line-height: 32px;
+text-transform: uppercase;
+font-family: 'Cantarell', sans-serif;
+}
+.social-section-middle {
+height:420px;
+width: 500px;
+padding-top: 20px;
+margin-left: 170px;
+/*background-color: yellow;*/
+}
+
+.bullying-header h1 {
+margin-top: -15px;
+}
+.bullying-content {
+width: 480px;
+/*background-color: lightblue;*/
+margin-left: 10px;
+}
+.bullying-header {
+width: 450px;
+margin-left: 40px;
+}
+.bullying-col {
+width:140px;
+margin-right:20px;
+float: left;
+}
+.bullying-col h1{
+width :100%;
+margin-bottom : 0px;
+}
+.content-bottom .bullying-entry-description {
+  color: #FFFFFF;
+  font-family: cantarell;
+  font-size: 11px;
+  font-weight: 400;
+  margin: 18px 30px 10px;
+  padding-top: 20px;
+}
+.content-bottom .bullying-entry-description h6, .content-bottom .bullying-entry-guidelines h6{
+	color: #FF5A1A;
+	font-size: 17px;
+	text-align: center;
+	text-transform: uppercase;
+}
+.content-bottom-headers {
+  border-bottom: 2px solid #424242;
+  text-align: center;
+	padding-bottom: 3px;
+	margin-bottom: 10px;
+}
+.bullying-entry-description li {
+  color: #C4C4C4;
+  font-family: cantarell;
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 17px;
+}
+.content-bottom .bullying-entry-guidelines {
+	color: #FFFFFF;
+	font-size: 11px;
+	font-weight: bold;
+	margin: 10px 30px;
+	padding-top: 10px;
+	height: 310px;
+}
+.bullying-entry-guidelines li {
+  color: #C4C4C4;
+  font-family: cantarell;
+  font-weight: 400;
+	margin-left: 14px;
+	font-size: 13px;
+}
+.bullying-entry-guidelines .message {
+	float: left;
+	padding-right: 20px;
+	width: 480px;
+	height: 120px;
+}
+.bullying-entry-guidelines .details {
+	height: 120px;
+	float: left;
+}
+.bullying-entry-guidelines .tone {
+	float: left;
+	margin-bottom: 20px;
+	margin-top: 10px;
+	padding-right: 30px;
+	width: 480px;
+	height: 120px;
+	float: left;
+}
+.bullying-entry-guidelines .examples {
+	margin-bottom: 20px;
+	margin-top: 10px;
+	height: 120px;
+	float: left;
+	min-width: 300px;
+}
+.message h5, .details h5, .tone h5{
+	color: #FF5A1A;
+	font-size: 15px;
+	text-transform: uppercase;
+}
+.examples h5 {
+  color: #FF5A1A;
+  font-size: 15px;
+  padding-bottom: 20px;
+  text-transform: uppercase;
+}
+.examples a {
+  padding-right: 10px;
+}
+
+/*Entry form css*/
+.entry-form-header {
+	background-color: #FF5A1A;
+	color: #FFFFFF;
+	font-size: 15px;
+	font-weight: bold;
+	height: 50px;
+	line-height: 50px;
+	margin-left: 50px;
+	text-align: center;
+	text-transform: uppercase;
+	width: 900px;
+}
+.entry-form-body {
+	background-color: #000000;
+	margin-left: 60px;
+	margin-bottom: 50px;
+	min-height: 700px;
+	width: 878px;
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	padding-top: 20px;
+}
+.cu_video_nav {
+	width: 365px;
+	height: 60px;
+}
+.cu_video_text {
+	font-size: 13px;
+	color: #FFFFFF;
+	font-family: cantarell;
+	font-weight: normal;
+
+}
+.cu_video_nav_title {
+	float: left;
+	padding: 8px;color: #fff;
+	margin: 10px 10px 10px 60px;
+}
+a.cu_video_nav_box {
+	float: left;
+	width: 27px;
+	height: 22px;
+	background: #303030;
+	color: #c0c0c0;
+	text-align: center;
+	margin: 16px 5px 16px 0px;
+	text-decoration: none;
+	padding-top: 2px;
+}
+a.cu_video_nav_box:hover {
+	background: #ffffff;
+	color: #4c4d4f;
+}
+a.active {
+	float: left;
+	width: 27px;
+	height: 22px;
+	background: #ffffff;
+	color: #4c4d4f;
+	text-align: center;
+	margin: 16px 5px 16px 0px;
+	text-decoration: none
+}
+
+/** Anti Bullying Concert page css **/
+#wrapper {
+  height: 1110px;
+}
+#anti-bullying-concert .billboard {
+  background: url("../img/unite-against-bullying/billboard.png") repeat scroll 0 0 #000000;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  box-shadow: 0 0 14px rgba(50, 50, 0, 0.64);
+  height: 100%;
+  margin: 0 auto;
+  width: 878px;
+}
+#content-mid .trip {
+	background: none repeat scroll 0 0 #E5531A;
+	box-shadow: 0 0 14px rgba(50, 50, 0, 0.64);
+	height: 287px;
+	margin: 0 auto;
+	width: 904px;
+}
+#trip-win p {
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 24px;
+}
+#content-bottom {
+	background-color: #000000;
+	margin-top: -70px;
+	margin-left: 60px;
+	margin-bottom: 55px;
+	min-height: 444px;
+	width: 878px;
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px
+}
+#content-bottom-headers {
+  border-bottom: 2px solid #424242;
+  color: #FF5A1A;
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  text-align: center !important;
+  font-family: montserrat;
+  letter-spacing: -1px;
+}
+#content-bottom p {
+  color: #FFFFFF;
+  font-family: cantarell;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19px;
+  margin: 0;
+  padding: 0;
+}
+.unite-live {
+  background:  url("../img/unite-logo.png") no-repeat;
+}
+.rr-logo {
+  background:  url("../img/rr-logo.png") no-repeat;
+  width: 87px;
+  height:62px;
+}
+.flip-logo {
+  background:  url("../img/flip-logo.png") no-repeat;
+  width: 104px;
+  height:61px;
+}
+.usa-logo {
+  background:  url("../img/usa-logo.png") no-repeat;
+  width: 218px;
+  height:61px;  
+}
+#content-bottom #bullying-entry-description {
+  color: #FFFFFF;
+  font-family: cantarell;
+  font-size: 11px;
+  font-weight: 400;
+  margin: 18px 30px 10px;
+  padding-top: 20px;
+}
+#bullying-entry-description ul {
+  padding-left: 15px;
+  padding-top: 15px;
+  color: #FFFFFF;
+  font-family: cantarell;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19px;
+  margin: 0;
+}
+#bullying-entry-description ul  li{
+  padding-bottom: 8px;
+}
+#bullying-entry-description a:hover {
+  color: #FFFFFF;
+  text-decoration: underline;
+}
+#bullying-entry-description a:visited {
+  color: #FFFFFF;
+}
+#uab-commercial-link {
+  color: #FFFFFF;
+  font-size: 15px;
+  line-height: 18px;
+  text-decoration: none;
+}
+.social span {
+  font-size: 8px !important;
+  margin-top:-10px !important;
+}
+#page-wrapper {
+  margin: 0 auto;
+  height: 1230px;
+  width: 100%;
+  background: url('../img/bg-body.jpg') center 25px no-repeat;
+}

@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Feature Publisher7 MPX Views feature.
+ */
+
+include_once 'feature_pub_mpx_views.features.inc';

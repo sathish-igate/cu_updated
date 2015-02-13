@@ -1,0 +1,195 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Television feature.
+ */
+
+include_once 'pub_tv.features.inc';
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_tv_form_tv_episode_node_form_alter(&$form, &$form_state) {
+  // Add AJAX handling to the the show field so that users only see seasons for
+  // the selected show.
+  $form['field_show'][LANGUAGE_NONE]['#ajax'] = array(
+    'event' => 'change',
+    'callback' => 'pub_tv_season_option_populate_js',
+    'wrapper' => 'session-wrapper',
+    'effect' => 'fade',
+  );
+
+  // Hide the seasons field until the user has selected a show.
+  $form['field_season'][LANGUAGE_NONE]['#states'] = array(
+    'disabled' => array(
+      ':input[name="field_show[' . LANGUAGE_NONE . ']"]' => array(
+        'value' => '_none',
+      ),
+    ),
+  );
+
+  $form['field_season'][LANGUAGE_NONE]['#description'] = t('You must select a TV Show before selecting a season.');
+  $form['field_season'][LANGUAGE_NONE]['#prefix'] = '<div id="session-wrapper">';
+  $form['field_season'][LANGUAGE_NONE]['#suffix'] = '</div>';
+
+  // Check if a value for show has already been provided.
+  $selected_show = '';
+  if (isset($form_state['values']['field_show'][LANGUAGE_NONE][0]['target_id'])) {
+    $selected_show = $form_state['values']['field_show'][LANGUAGE_NONE][0]['target_id'];
+  }
+  elseif (isset($form_state['node']->field_show[LANGUAGE_NONE][0]['target_id'])) {
+    $selected_show = $form_state['node']->field_show[LANGUAGE_NONE][0]['target_id'];
+  }
+
+  // If a value for show has already been provided, reset the form accordingly.
+  if (!empty($selected_show)) {
+    // Get the list of seasons based on the user-entered show value.
+    $query = new EntityFieldQuery('entity_type', 'node');
+    $query->entityCondition('bundle', 'tv_season');
+    $query->fieldCondition('field_show', 'target_id', $selected_show);
+    $result = $query->execute();
+
+    // If the first element of the options aray is "- Select -" (et. al.) then
+    // add it to the beginning of our new options array.
+    $keys = array_keys($form['field_season'][LANGUAGE_NONE]['#options']);
+    if (!is_null($keys[0]) && !is_numeric($keys[0])) {
+      $options = array_slice($form['field_season'][LANGUAGE_NONE]['#options'], 0, 1);
+    }
+    else {
+      $options = array();
+    }
+
+    // Add each season that belongs to the user-selected show to the options
+    // array.
+    if (isset($result['node'])) {
+      $news_items_nids = array_keys($result['node']);
+      $nodes = entity_load('node', $news_items_nids);
+      foreach ($nodes as $node) {
+        $options[$node->nid] = check_plain($node->title);
+      }
+    }
+    else {
+      drupal_set_message(t('There are no seasons associated with the show you selected. Please !url first.', array('!url' => l(t('create a season'), 'node/add/season'))), 'error');
+      watchdog('pub_tv', 'While creating an episode, a user chose a season that does not belong to the selected show.', array(), WATCHDOG_WARNING);
+    }
+    $form['field_season'][LANGUAGE_NONE]['#description'] = '';
+    $form['field_season'][LANGUAGE_NONE]['#options'] = $options;
+  }
+
+  // If a user re-selects "- Select a value -" on the node add form, or if the
+  // slected show has no seasons, make sure the season field is re-disabled.
+  if ((isset($form_state['values']['field_show']) && is_null($form_state['values']['field_show'][LANGUAGE_NONE][0]['target_id'])) || (!empty($selected_show) && !isset($result['node']))) {
+    $form['field_season'][LANGUAGE_NONE]['#disabled'] = TRUE;
+  }
+
+  // Get the character term(s) from the role vocabulary.
+  $character_role_term = taxonomy_get_term_by_name('character', 'role');
+  $character_role_id = '';
+
+  // Loop through the results and get the term id of the first term matching
+  // character.
+  foreach ($character_role_term as $key => $term) {
+    if (strtolower($term->name) == 'character') {
+      $character_role_id = (string) $key;
+      break;
+    }
+  }
+
+  // If we don't find a character term in the role vocab, there's no reason to
+  // go further since the user won't be able to select the character role.
+  if (!empty($character_role_id)) {
+    $lang = $form['language']['#value'];
+
+    // Loop through the credits in field_episode_credit
+    foreach ($form['field_episode_credit'][$lang] as $key => $credit) {
+
+      /* The container element for all the fields in this field collection will
+       * be an array with a field_character field; any other element in the
+       * field_movie_credit array we want to ignore.
+       * Once we know we have the right container element for the credit fields,
+       * we check if [#states]['visible'] has already been set, and if not, we
+       * set it.
+       */
+      if (is_array($credit) && !empty($credit['field_episode_credit_character']) && empty($credit['field_episode_credit_character']['#states']['visible'])) {
+
+        // Show the character field of this credit only if the character role
+        // has been selected.
+        $form['field_episode_credit'][$lang][$key]['field_episode_credit_character']['#states']['visible'] = array(
+          ':input[name="field_episode_credit[' . $lang . '][' . $key . '][field_episode_credit_role][' . $lang . ']"]' => array('value' => $character_role_id),
+        );
+      }
+    }
+  }
+
+  // Add a form validator.
+  $form['#validate'][] = 'pub_tv_episode_form_validate';
+}
+
+/**
+ * Populates the "season" entity reference field.
+ *
+ * An Ajax callback function that populates the "season" entity reference field
+ * with seasons for the user specified show.
+ *
+ * @see pub_tv_form_episode_node_form_alter()
+ */
+function pub_tv_season_option_populate_js($form, $form_state) {
+  return $form['field_season'];
+}
+
+/**
+ * Form validation for the episode node form.
+ */
+function pub_tv_episode_form_validate($form, &$form_state) {
+  $selected_season = isset($form_state['values']['field_season'][LANGUAGE_NONE][0]['target_id']) ? $form_state['values']['field_season'][LANGUAGE_NONE][0]['target_id'] : NULL;
+  $selected_show = isset($form_state['values']['field_show'][LANGUAGE_NONE][0]['target_id']) ? $form_state['values']['field_show'][LANGUAGE_NONE][0]['target_id'] : NULL;
+
+  if ($selected_season) {
+    $season_node = node_load($selected_season);
+    if ($season_node->field_show[LANGUAGE_NONE][0]['target_id'] !== $selected_show) {
+      form_set_error('field_season', t('The season you selected belongs to a different show than the show you selected on this form.'));
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * Add custom taxonomy terms to the vocabularies created by this module.
+ */
+function pub_tv_entity_insert($entity, $type) {
+  if ($type == 'taxonomy_vocabulary') {
+
+    $terms = array();
+    switch ($entity->machine_name) {
+      case 'rating_attributes':
+        $terms = array(
+          'Suggestive Dialogue',
+          'Coarse or Crude Language',
+          'Sexual Situations',
+          'Violence',
+        );
+        break;
+
+      case 'tv_rating':
+        $terms = array(
+          'All Children',
+          'Directed to Older Children',
+          'Directed to Older Children - Fantasy Violence',
+          'General Audience',
+          'Parental Guidance Suggested',
+          'Parents Strongly Cautioned',
+          'Mature Audiences Only',
+        );
+        break;
+    }
+
+    foreach ($terms as $name) {
+      $term = new StdClass();
+      $term->name = $name;
+      $term->vid = $entity->vid;
+      $term->vocabulary_machine_name = $entity->machine_name;
+      taxonomy_term_save($term);
+    }
+  }
+}

@@ -1,0 +1,4 @@
+name = Surf
+description = Integrate Surf with Drupal.
+core = 7.x
+configure = admin/config/services/surf

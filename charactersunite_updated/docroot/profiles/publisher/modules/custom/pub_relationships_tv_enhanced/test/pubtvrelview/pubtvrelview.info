@@ -1,0 +1,8 @@
+name=Publisher TV Relationship View Test
+description=Module to test view relationship in SimpleTest. This module is meant to be enabled only by SimpleTest.
+core = 7.x
+group = Testing
+
+hidden = TRUE
+
+dependencies[] = views

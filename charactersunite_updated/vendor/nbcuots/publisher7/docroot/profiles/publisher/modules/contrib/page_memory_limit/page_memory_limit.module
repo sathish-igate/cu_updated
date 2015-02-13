@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * Implements hook_init().
+ */
+function page_memory_limit_init() {
+  if ($pages = variable_get('page_memory_limit', array())) {
+    ksort($pages);
+    foreach ($pages as $page => $memory_limit) {
+      switch (TRUE) {
+        case $page == '<admin>' && path_is_admin($_GET['q']):
+        case $page == '<front>' && drupal_is_front_page():
+        case fnmatch($page, $_GET['q']):
+          if (!drupal_check_memory_limit($memory_limit)) {
+            @ini_set('memory_limit', $memory_limit);
+            return;
+          }
+          break;
+      }
+    }
+  }
+}
+
+if (!function_exists('fnmatch')) {
+  function fnmatch($pattern, $string) {
+    return preg_match("#^" . strtr(preg_quote($pattern, '#'), array('\*' => '.*', '\?' => '.')) . "$#i", $string);
+  }
+}

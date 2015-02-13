@@ -1,0 +1,19 @@
+name = Dynamic Queue
+description = Create dynamic queues of entities
+core = 7.x
+
+dependencies[] = ctools
+dependencies[] = entity
+dependencies[] = views
+dependencies[] = html5_tools
+dependencies[] = taxonomy
+
+files[] = dynamic_queue.class.inc
+files[] = DynamicQueueEntityFieldQuery.inc
+files[] = views/dynamic_queues.views.inc
+files[] = views/handlers/dynamic_queue_handler_field_dynamic_queue_published.inc
+files[] = views/handlers/dynamic_queue_handler_field_dynamic_queue_operations.inc
+files[] = views/handlers/dynamic_queue_handler_field_dynamic_queue_revision_operations.inc
+files[] = views/handlers/dynamic_queue_handler_field_dynamic_queue_revision_published.inc
+files[] = views/handlers/dynamic_queue_handler_field_dynamic_queue_revision_is_public.inc
+files[] = test/dynamic_queue.test

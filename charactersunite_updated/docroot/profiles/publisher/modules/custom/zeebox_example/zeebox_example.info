@@ -1,0 +1,7 @@
+name = zeebox Example
+description = zeebox example blocks
+core = 7.x
+package = zeebox
+configure = zeebox-example
+dependencies[] = zeebox
+

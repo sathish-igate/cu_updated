@@ -1,0 +1,147 @@
+<?php
+
+/**
+ * @file
+ * Installation and schema hooks for pub_report_server.module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function pub_report_server_schema() {
+  $schema = array();
+  $schema['pub_report_sites'] = array(
+    'description' => 'The base table for Site Reports entity',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Primary key of the Site Reports entity',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'site_name' => array(
+        'description' => 'Name of the site.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'api_version' => array(
+        'description' => 'Report API version.',
+        'type' => 'varchar',
+        'length' => '20',
+        'not null' => FALSE,
+      ),
+      'modules' => array(
+        'description' => 'Modules used by the site.',
+        'type' => 'text',
+        'length' => '30000',
+        'not null' => TRUE,
+      ),
+      'module_versions' => array(
+        'description' => 'Module versions json array.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'last_report_diff' => array(
+        'description' => 'Diff data from the previous reports for the site.',
+        'type' => 'text',
+        'length' => '50000',
+        'not null' => FALSE,
+      ),
+      'modules_count' => array(
+        'description' => 'Number of modules used',
+        'type' => 'int',
+        'length' => 10,
+        'not null' => TRUE,
+      ),
+      'publisher_version' => array(
+        'description' => 'Version of the Publisher that the site is using.',
+        'type' => 'varchar',
+        'length' => '30',
+        'not null' => FALSE,
+      ),
+      'publisher_profile' => array(
+        'description' => 'Profile installed.',
+        'type' => 'varchar',
+        'length' => '100',
+        'not null' => FALSE,
+      ),
+      'drupal_version' => array(
+        'description' => 'Version of Drupal that the site is using.',
+        'type' => 'varchar',
+        'length' => '30',
+        'not null' => TRUE,
+      ),
+      'admin_theme' => array(
+        'description' => 'Admin theme that the site is using.',
+        'type' => 'varchar',
+        'length' => '120',
+        'not null' => FALSE,
+      ),
+      'default_theme' => array(
+        'description' => 'Default theme that the site is using.',
+        'type' => 'varchar',
+        'length' => '120',
+        'not null' => FALSE,
+      ),
+      'tabular_data' => array(
+        'description' => 'JSON object for tabular data.',
+        'type' => 'text',
+        'length' => '250000',
+        'not null' => FALSE,
+      ),
+      'time_sent' => array(
+        'description' => 'Time when the record was sent by site.',
+        'type' => 'int',
+        'length' => 10,
+        'not null' => TRUE,
+      ),
+      'last_report' => array(
+        'description' => 'Determines whether the record is a most recent report.',
+        'type' => 'int',
+        'length' => 2,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+  return $schema;
+}
+
+/**
+ * Add new fields to the pub_report_sites table.
+ */
+function pub_report_server_update_7200() {
+  $api_version_spec = array(
+    'description' => 'Report API version.',
+    'type' => 'varchar',
+    'length' => '20',
+    'not null' => FALSE,
+  );
+  db_add_field('pub_report_sites', 'api_version', $api_version_spec);
+
+  $module_versions_spec = array(
+    'description' => 'Module versions json array.',
+    'type' => 'text',
+    'length' => '50000',
+    'not null' => FALSE,
+  );
+  db_add_field('pub_report_sites', 'module_versions', $module_versions_spec);
+
+  $tabular_data_spec = array(
+    'description' => 'JSON object for tabular data.',
+    'type' => 'text',
+    'length' => '250000',
+    'not null' => FALSE,
+  );
+  db_add_field('pub_report_sites', 'tabular_data', $tabular_data_spec);
+
+  $last_report_diff_spec = array(
+    'description' => 'Diff data from the previous reports for the site.',
+    'type' => 'text',
+    'length' => '50000',
+    'not null' => FALSE,
+  );
+  db_add_field('pub_report_sites', 'last_report_diff', $last_report_diff_spec);
+}

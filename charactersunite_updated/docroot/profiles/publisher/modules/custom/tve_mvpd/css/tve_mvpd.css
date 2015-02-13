@@ -1,0 +1,36 @@
+.mvpd-selector-wrapper {
+  float: left;
+}
+
+.mvpd-selector {
+  float: left;
+  margin-left: 10px !important;
+  font-weight: bold;
+}
+
+.mvpd-item {
+  margin-top: 10px;
+}
+
+.mvpd-logo-light {
+  background-color: #EAEAEA;
+}
+
+.mvpd-overridden-logo {
+  color: #54A505;
+  margin-left: 10px;
+  text-transform: none;
+  font-weight: normal;
+}
+
+.mvpd-conflict-logo {
+  color: #FF7200;
+  margin-left: 10px;
+  text-transform: none;
+  font-weight: normal;
+}
+
+.mvpd-conflict-logo-desc {
+  font-style: italic;
+  color: #FF7200;
+}

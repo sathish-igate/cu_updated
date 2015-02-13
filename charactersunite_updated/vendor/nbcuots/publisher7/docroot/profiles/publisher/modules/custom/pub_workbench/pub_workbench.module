@@ -1,0 +1,364 @@
+<?php
+
+/**
+ * @file
+ * Module file for Publisher Workbench.
+ */
+
+include_once 'pub_workbench.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function pub_workbench_menu() {
+  $items['admin/workbench/scheduled'] = array(
+    'title' => 'Scheduled',
+    'description' => 'View scheduled content.',
+    'page callback' => 'pub_workbench_content',
+    'access arguments' => array('access workbench'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'pub_workbench.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_workbench_menu_alter(&$items) {
+  $items['admin/workbench/content']['title'] = 'Dashboard';
+  $items['admin/workbench/content/edited']['access callback'] = FALSE;
+}
+
+/**
+ * Implements hook_views_default_alter().
+ */
+function pub_workbench_views_default_views_alter(&$views) {
+  // Disable some of the Workbench Views.
+  if (isset($views['workbench_current_user'])) {
+    $views['workbench_current_user']->disabled = TRUE;
+  }
+  if (isset($views['workbench_edited'])) {
+    $views['workbench_edited']->disabled = TRUE;
+  }
+  if (isset($views['workbench_recent_content'])) {
+    $views['workbench_recent_content']->disabled = TRUE;
+  }
+  if (isset($views['workbench_moderation'])) {
+    $views['workbench_moderation']->disabled = TRUE;
+  }
+  if (isset($views['state_flow_states_by_node'])) {
+    $views['state_flow_states_by_node']->disabled = TRUE;
+  }
+  if (isset($views['queues_revision_list'])) {
+    $views['queues_revision_list']->disabled = TRUE;
+  }
+  if (isset($views['dynamic_queue_revision_list'])) {
+    $views['dynamic_queue_revision_list']->disabled = TRUE;
+  }
+  if (isset($views['pub_workbench_dynamic_queue_revision_list'])) {
+    if (!module_exists('dynamic_queue_workbench')) {
+      $views['pub_workbench_dynamic_queue_revision_list']->disabled = TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_views_pre_render().
+ */
+function pub_workbench_views_pre_render(&$view) {
+  if ($view->name == 'pub_state_flow_states_by_node') {
+    $keys = array_keys($view->result);
+    if (!empty($keys)) {
+      $limit = variable_get('node_number_of_revs_displayed_' . node_load($view->result[$keys[0]]->state_flow_states_entity_id)->type);
+      if ($limit > 0) {
+        $view->result = array_slice($view->result, 0, $limit);
+      }
+    }
+    drupal_add_css(drupal_get_path('module', 'pub_workbench') . '/css/pub_workbench.css', array('weight' => 11));
+    drupal_add_library('system', 'drupal.collapse');
+  }
+
+  if ($view->name === 'pub_workbench_scheduled_content' || $view->name === 'pub_workbench_scheduled_videos') {
+    module_load_include('inc', 'pub_workbench', 'pub_workbench.pages');
+    pub_workbench_css();
+  }
+
+  if ($view->name == 'pub_workbench_queues_revision_list') {
+    $keys = array_keys($view->result);
+    if (!empty($keys)) {
+      $limit = variable_get('queue_number_of_revs_displayed_' . queue_load($view->result[$keys[0]]->state_flow_states_entity_id)->type);
+      if ($limit > 0) {
+        $view->result = array_slice($view->result, 0, $limit);
+      }
+    }
+    drupal_add_css(drupal_get_path('module', 'pub_workbench') . '/css/pub_workbench.css');
+  }
+
+  if ($view->name == 'pub_workbench_dynamic_queue_revision_list') {
+    $keys = array_keys($view->result);
+    if (!empty($keys)) {
+      $limit = variable_get('dynamic_queue_number_of_revs_displayed_' . dynamic_queue_load($view->result[$keys[0]]->state_flow_states_entity_id)->type);
+      if ($limit > 0) {
+        $view->result = array_slice($view->result, 0, $limit);
+      }
+    }
+    drupal_add_css(drupal_get_path('module', 'pub_workbench') . '/css/pub_workbench.css');
+  }
+}
+
+function pub_workbench_save_queue_revs_displayed(&$form, $form_state) {
+  variable_set('queue_number_of_revs_displayed_'.$form['type']['#default_value'],$form_state['values']['queue_number_of_revs_displayed']);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function pub_workbench_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'state_flow_entity_events_revision') {
+    $form['description']['#markup'] = '<h2>Change the state of Revision ' . $form['entity_revision']['#value']->vid . ' below</h2>';
+    $form['description']['#weight'] = -1;
+  }
+
+  $form_list = array(
+    'queues_type_form', 'node_type_form',
+    'file_entity_file_type_form', 'dynamic_queue_type_form',
+  );
+  if (in_array($form_id, $form_list)) {
+    $select_values = array(
+      0 => 'All', 3 => 3,  5 => 5,
+      10 => 10, 15 => 15, 20 => 20,
+      50 => 50,
+    );
+
+    if ($form_id == 'node_type_form') {
+      $fieldname = 'node_number_of_revs_displayed';
+      $insert_field_after = "description";
+      $type = $form['#node_type']->type;
+    }
+    elseif ($form_id == 'queues_type_form') {
+      $fieldname = 'queue_number_of_revs_displayed';
+      $insert_field_after = "target";
+      $type = $form['type']['#default_value'];
+      $form['#submit'][] = 'pub_workbench_save_queue_revs_displayed';
+    }
+    elseif ($form_id == 'dynamic_queue_type_form') {
+      $fieldname = 'dynamic_queue_number_of_revs_displayed';
+      $insert_field_after = "entity_type";
+      $type = $form['type']['#default_value'];
+      $form['#submit'][] = 'pub_workbench_dynamic_queue_type_form_submit';
+    }
+    else {
+      // For file_entity_file_type_form forms that we don't want to display
+      // revisions on, e.g. MPX video detail pages.
+      $fieldname = '';
+    }
+
+    if (strlen($fieldname) > 0) {
+      $key_index = array_search($insert_field_after, array_keys($form));
+      $def_val = variable_get($fieldname . '_' . $type);
+      $from_before_field = array_slice($form, 0, $key_index + 1);
+      $from_before_field[$fieldname]['#title'] = 'Number of revisions to show';
+      $from_before_field[$fieldname]['#type'] = 'select';
+      $from_before_field[$fieldname]['#default_value'] = in_array($def_val, array_keys($select_values)) ? $def_val : 0;
+      $from_before_field[$fieldname]['#options'] = $select_values;
+      $from_after_field = array_slice($form, $key_index + 1);
+      $form = $from_before_field + $from_after_field;
+    }
+  }
+
+  // Use date popup picker on admin/workbench/scheduled/content
+  // & admin/workbench/scheduled/videos.
+  if ($form['#id'] === 'views-exposed-form-pub-workbench-scheduled-content-page' ||
+    $form['#id'] === 'views-exposed-form-pub-workbench-scheduled-videos-page') {
+    _pub_workbench_use_date_popup($form, 'time_scheduled');
+  }
+}
+
+/**
+ * Additional form submission handler for dynamic_queue_type_form().
+ *
+ * @see dynamic_queue_type_form()
+ * @see pub_workbench_form_alter()
+ */
+function pub_workbench_dynamic_queue_type_form_submit(&$form, $form_state) {
+  variable_set('dynamic_queue_number_of_revs_displayed_' . $form['type']['#default_value'], $form_state['values']['dynamic_queue_number_of_revs_displayed']);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_workbench_form_node_type_form_alter(&$form, $form_state) {
+  $form['workflow']['node_options']['#default_value'][] = 'revision';
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function pub_workbench_form_node_form_alter(&$form, &$form_state, $form_id) {
+  // Note the global user is being used.
+  global $user;
+
+  if (isset($form['revision_information'])) {
+    $form['revision_information']['#access'] = FALSE;
+    $form['revision_information']['revision']['#default_value'] = TRUE;
+  }
+  if (isset($form['options'])) {
+    // State Flow Entity Changes.
+    $form['options']['#weight'] = -11;
+    $form['options']['revision'] = $form['revision_information']['revision'];
+    // We have to unset here we can't simply do #access = FALSE;
+    unset($form['revision_information']['revision']);
+    $form['options']['revision']['#weight'] = -10;
+    $form['options']['state_flow']['#title'] = t('Moderation States');
+    $form['options']['state_flow']['event']['#title'] = t('Moderation State');
+    $form['options']['#attributes']['class'][] = 'required-fields';
+    $form['options']['promote']['#default_value'] = 0;
+    $form['options']['promote']['#access'] = FALSE;
+    $form['options']['sticky']['#default_value'] = 0;
+    $form['options']['sticky']['#access'] = FALSE;
+    $form['options']['#attached']['js'][drupal_get_path('module', 'pub_workbench') . '/pub_workbench.js'] = array(
+      'weight' => 10,
+    );
+    $form['options']['#attached']['css'][drupal_get_path('module', 'pub_workbench') . '/css/pub-workbench-node.css'] = array(
+      'weight' => 10,
+    );
+
+    // Disable the "new revision" checkbox and check it when adding a node.
+    if (is_null($form['nid']['#value'])) {
+      $form['options']['revision']['#default_value'] = 1;
+      $form['options']['revision']['#access'] = FALSE;
+    }
+    else {
+      // If the user chooses "Unpublish" disable the option.
+      // for creating a new revision.
+      $form['options']['revision']['#states'] = array(
+        'disabled' => array(
+          ':input[name="event"]' => array('value' => 'to_unpublished'),
+        ),
+        'unchecked' => array(
+          ':input[name="event"]' => array('value' => 'to_unpublished'),
+        ),
+      );
+    }
+
+    // Move the Assignee textfield next to Moderation State.
+    $form['options']['state_flow']['event']['#weight'] = -1;
+    $form['options']['state_flow']['field_workbench_assigned']['#weight'] = 0;
+    if (empty($form['options']['state_flow']['field_workbench_assigned'][LANGUAGE_NONE][0]['target_id']['#default_value'])) {
+      $form['options']['state_flow']['field_workbench_assigned'][LANGUAGE_NONE][0]['target_id']['#default_value'] = "{$user->name} ({$user->uid})";
+    }
+
+    if (!empty($form['options']['revision_scheduler'])) {
+      $form['options']['revision_scheduler']['#title'] = t('Scheduling');
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_workbench_form_revision_scheduler_add_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['datetime']['#date_format'])) {
+    $form['datetime']['#date_format'] = variable_get('date_format_edit_date', 'm/d/Y - h:i A');
+    $form['datetime']['#date_increment'] = 5;
+  }
+}
+
+/**
+ * Implements hook_workbench_content_alter().
+ */
+function pub_workbench_workbench_content_alter(&$output) {
+  // Use our custom pub_workbench_current_user over workbench's defaults.
+  $output['workbench_current_user']['#view'] = 'pub_workbench_current_user';
+  $output['workbench_edited']['#view'] = 'pub_workbench_edited';
+  $output['workbench_recent_content']['#view'] = 'pub_workbench_recent_content';
+}
+
+/**
+ * Implements hook_preprocess_views_view_table().
+ *
+ * This is done to convert the "profile image" field to a thumbnail for image
+ * files.
+ */
+function pub_workbench_preprocess_views_view_field(&$variables) {
+  $view = $variables['view'];
+  if ($view->name == 'pub_workbench_current_user' && isset($variables['field']->definition['field_name']) && $variables['field']->definition['field_name'] == 'field_profile_image') {
+    if (empty($variables['output'])) {
+      // We could put the default picture here.
+      $variables['output'] = theme(
+        'image', array(
+          'path' => drupal_get_path('module', 'workbench') . '/images/profile_default.png',
+          'attributes' => array(
+            'width' => '100px',
+          ),
+        )
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_workbench_module_implements_alter().
+ */
+function pub_workbench_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'form_node_form_alter' || $hook == 'form_alter') {
+    // Move pub_workbench_form_node_form_alter() to the end of the list.
+    // I did this in code instead of database because we want to be after,
+    // workbench, workbench_moderation, state_flow_entity, state_machine.
+    // A decent amount of modules, better done in code ;-/.
+    if (isset($implementations['pub_workbench'])) {
+      $group = $implementations['pub_workbench'];
+      unset($implementations['pub_workbench']);
+      $implementations['pub_workbench'] = $group;
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_revision_operation_info_alter().
+ */
+function pub_workbench_entity_revision_operation_info_alter(&$operations) {
+  if (!empty($operations['node']['workbench_moderation_to_review'])) {
+    unset($operations['node']['workbench_moderation_to_review']);
+  }
+}
+
+/**
+ * Implements hook_clone_node_alter().
+ *
+ * Cleanup the State Flow data that exists on the node before cloning.
+ */
+function pub_workbench_clone_node_alter($node, &$context) {
+  unset($node->state_flow,
+    $node->published_revision_id,
+    $node->current_state,
+    $node->current_state_timestamp
+  );
+}
+
+/**
+ * Utility function for applying the date popup type to the specified field.
+ */
+function _pub_workbench_use_date_popup(&$form, $key) {
+  $form[$key] = array(
+    '#type' => 'date_popup',
+    '#date_year_range' => '-0:+3',
+    '#default_value' => time(),
+    '#date_label_position' => 'within',
+    '#date_format' => 'm/d/Y',
+  );
+  $form['#info']['filter-' . $key]['description'] = '';
+
+  // Apply style to get fields to line up properly.
+  if (!isset($form['#attached'])) {
+    $form['#attached'] = array();
+  }
+  if (!isset($form['#attached']['css'])) {
+    $form['#attached']['css'] = array();
+  }
+  if (!in_array(drupal_get_path('module', 'pub_workbench') . '/css/pub_workbench.css', $form['#attached']['css'])) {
+    $form['#attached']['css'][] = drupal_get_path('module', 'pub_workbench') . '/css/pub_workbench.css';
+  }
+}

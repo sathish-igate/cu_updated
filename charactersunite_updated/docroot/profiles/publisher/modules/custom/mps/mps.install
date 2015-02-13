@@ -1,0 +1,105 @@
+<?php
+
+/**
+ * @file
+ * Installation functions for the MPS module.
+ */
+
+/**
+ * Implements hook_requirements().
+ *
+ * @see mps_page_alter()
+ */
+function mps_requirements($phase) {
+  $requirements = array();
+  // Ensure translations don't break during installation.
+  $t = get_t();
+
+  $requirements['mps'] = array(
+    'title' => $t('MPS'),
+    'description' => $t('Master Page Service'),
+  );
+
+  if (module_exists('pixelman')) {
+    $requirements['mps']['value'] = $t('The Pixelman module is enabled, it should not be if MPS is, disable Pixelman.');
+    $requirements['mps']['severity'] = REQUIREMENT_ERROR;
+  }
+  else {
+    $requirements['mps']['value'] = $t('The Pixelman module is disabled, all is well.');
+    $requirements['mps']['severity'] = REQUIREMENT_OK;
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function mps_uninstall() {
+  variable_del('mps_host');
+  variable_del('mps_integration');
+  variable_del('mps_site_override');
+  variable_del('mps_query');
+}
+
+/**
+ * Implements hook_schema().
+ */
+function mps_schema() {
+  $schema['mps_blocks'] = array(
+    'description' => 'Stores information about MPS blocks.',
+    'export' => array(
+      'key' => 'machine_name',
+      'primary key' => 'block_id',
+      'identifier' => 'block',
+      'default hook' => 'default_mps_block',
+      'api' => array(
+        'owner' => 'mps',
+        'api' => 'default_mps_tags',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+      'load callback' => 'mps_block_load',
+      'delete callback' => 'mps_block_delete',
+    ),
+    'fields' => array(
+      'block_id' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary ID field for the table. Not used for anything except internal lookups.',
+        'no export' => TRUE,
+      ),
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The block's unique name.",
+      ),
+      'block_name' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "A human-readable name for the block.",
+      ),
+    ),
+    'primary key' => array('block_id'),
+    'unique keys' => array(
+      'machine_name' => array('machine_name'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function mps_enable() {
+  module_load_include('module', 'mps');
+
+  // When we enable the module, load the MPS ad blocks right away.
+  _mps_sync_ad_blocks();
+}

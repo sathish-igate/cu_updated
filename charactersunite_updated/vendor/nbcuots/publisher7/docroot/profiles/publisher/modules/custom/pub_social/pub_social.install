@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Publisher Social module.
+ */
+
+/**
+ * Set the module weight so it runs after most contrib modules.
+ */
+function pub_social_install() {
+  db_update('system')
+    ->fields(array('weight' => 10))
+    ->condition('name', 'pub_social', '=')
+    ->execute();
+}
+
+/**
+ * Enable new Facebook dependencies fb, fb_app and fb_post for Pub Social.
+ */
+function pub_social_update_7000() {
+  module_enable(array(
+    'fb_app',
+    'fb_post',
+  ));
+}

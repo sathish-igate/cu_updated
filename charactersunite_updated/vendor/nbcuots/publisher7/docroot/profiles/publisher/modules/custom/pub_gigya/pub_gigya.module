@@ -1,0 +1,178 @@
+<?php
+/**
+ * @file
+ * Code for the pub_gigya feature.
+ */
+
+include_once 'pub_gigya.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function pub_gigya_menu() {
+  $items = array();
+
+  $items['admin/config/services/gigya/debug'] = array(
+    'title' => 'Debug',
+    'type' => MENU_LOCAL_TASK,
+    'description' => "Debug Gigya users by logging in and out as, retrieving user info about and deleting Gigya users.",
+    'page callback' => 'pub_gigya_debug',
+    'access arguments' => array('administer gigya'),
+    'weight' => 10,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Overriding "Comment settings" dropdown options on Content Type add/edit
+ * pages.
+ */
+function pub_gigya_form_node_type_form_alter(&$form, &$form_state, $form_id) {
+  $form['comment']['comment']['#options'][1] = 'Hidden';
+  unset($form['comment']['comment']['#options'][0]);
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ *
+ * Overriding "Comment settings" options on node/edit & add pages.
+ */
+function pub_gigya_form_node_form_alter(&$form, &$form_state, $form_id) {
+  $form['comment_settings']['comment'][2]["#description"] = 'Gigya commenting is open to all users.';
+  $form['comment_settings']['comment']['#options'][1] = 'Hidden';
+  $form['comment_settings']['comment'][1]["#description"] = 'Gigya commenting is hidden for all users.';
+}
+
+/*
+ * Implements hook_node_view().
+ *
+ * Removes Drupal comment section from all nodes where commenting is enabled
+ * so it doesn't flash before Gigya comments are loaded via JavaScript since
+ * if users leave a comment while they have JavaScript disabled it will not be
+ * entered as a Gigya comment. Also replaces with empty div so Gigya can latch
+ * on and insert it's commenting system where Drupal's would normally be.
+ */
+function pub_gigya_node_view($node, $view_mode, $langcode) {
+  if ($node->comment == COMMENT_NODE_OPEN) {
+    $node->content['comments'] = array('#markup' => '<div id="comments"></div>');
+  }
+}
+
+/**
+ * Menu callback for admin/config/services/gigya/debug.
+ */
+function pub_gigya_debug() {
+  drupal_set_title(t('Gigya Debug Tool'));
+  $output = array();
+
+  $api_key = variable_get('gigya_APIKey', '');
+  $secret_key = variable_get('gigya_SecretKey', '');
+
+  if (empty($api_key) || empty($secret_key)) {
+    drupal_set_message(t('You must <a href="@url">set your Gigya Socialize keys</a> to use this tool.', array('@url' => '/admin/config/services/gigya')), 'error');
+  }
+  else {
+    $output['#attached'] = array(
+      'js' => array(
+        array(
+          'type' => 'setting',
+          'data' => array(
+            'gigya' => array(
+              'apiKey' => $api_key,
+            ),
+          ),
+        ),
+        array(
+          'data' => drupal_get_path('module', 'pub_gigya') . '/js/pub_gigya_debug.js',
+          'options' => array(
+            'type' => 'file',
+            'scope' => 'footer',
+            'group' => JS_LIBRARY,
+            'every_page' => FALSE,
+          ),
+        ),
+      ),
+    );
+
+    if (array_key_exists('method', $_POST)) {
+      switch ($_POST['method']) {
+        case 'notifyRegistration':
+          $request = new GSRequest($api_key, $secret_key, 'socialize.notifyRegistration', new GSObject('{"useHTTPS":true}'));
+          $request->setParam('uid', $_POST['uid']);
+          $request->setParam('siteUID', '_test_' . rand());
+          $result = $request->send();
+          break;
+
+        case 'deleteAccount':
+          $request = new GSRequest($api_key, $secret_key, 'socialize.deleteAccount', new GSObject('{"useHTTPS":true}'));
+          $request->setParam('uid', $_POST['uid']);
+          $result = $request->send();
+          break;
+
+        default:
+          drupal_set_message(t('There was an error with your submission.'), 'error');
+          return $output;
+      }
+      $output['result'] = array(
+        '#type' => 'markup',
+        '#markup' => $result->getData(),
+      );
+    }
+
+    $output['gigya_key'] = array(
+      '#type' => 'markup',
+      '#markup' => t('Gigya API key is: %key', array('%key' => $api_key)),
+      '#theme_wrappers' => array('container'),
+      '#attributes' => array('id' => 'gigya-key'),
+    );
+    $output['gigya_server'] = array(
+      '#type' => 'markup',
+      '#markup' => t('This host (!address) thinks the local time is !date', array('!address' => $_SERVER['SERVER_ADDR'], '!date' => date('g:i:s T'))),
+      '#theme_wrappers' => array('container'),
+      '#attributes' => array('id' => 'gigya-server'),
+    );
+    $output['gigya_output'] = array(
+      '#type' => 'markup',
+      '#markup' => '<button id="login-fb">login via Facebook</button>
+        <button id="login-tw">Login via Twitter</button>
+        <button id="logout">Logout</button>
+        <button id="refresh">Refresh userinfo</button>
+        <button id="delete">Delete Gigya user</button>',
+    );
+    $output['gigya_userinfo'] = array(
+      '#type' => 'markup',
+      '#theme_wrappers' => array('container'),
+      '#attributes' => array('id' => 'userinfo'),
+    );
+  }
+
+  // Set callback if we are using AJAX to request this content. See
+  // pub_gigya_debug.js for example.
+  if (isset($_POST['deliver_ajax']) && $_POST['deliver_ajax'] === 'true') {
+    $desired_delivery_callback = 'ajax_deliver';
+    pub_gigya_page_delivery_callback_alter($desired_delivery_callback, TRUE);
+  }
+
+  return $output;
+}
+
+/**
+ * Implements hook_page_delivery_callback_alter().
+ *
+ * This does nothing in this state. We call it from the page callback for
+ * admin/config/services/gigya/debug and make it work from there.
+ *
+ * @see pub_gigya_debug()
+ */
+function pub_gigya_page_delivery_callback_alter(&$callback, $set = FALSE) {
+  static $stored_callback;
+  if ($set) {
+    $stored_callback = $callback;
+  }
+  elseif (isset($stored_callback)) {
+    $callback = $stored_callback;
+  }
+}

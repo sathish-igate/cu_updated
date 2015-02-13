@@ -1,0 +1,16 @@
+name = Pub Display Suite
+description = Display Suite settings for Publisher 7
+core = 7.x
+package = Publisher
+php = 5.2.4
+version = 7.x-1.0
+project = pub_display_suite
+dependencies[] = ctools
+dependencies[] = ds
+features[ctools][] = ds:ds:1
+features[ds_fields][] = file_name
+features[ds_view_modes][] = admin_reference_preview
+features[ds_view_modes][] = entityreference_live_preview
+features[ds_view_modes][] = figure
+features[ds_view_modes][] = promoted_content
+features[features_api][] = api:1

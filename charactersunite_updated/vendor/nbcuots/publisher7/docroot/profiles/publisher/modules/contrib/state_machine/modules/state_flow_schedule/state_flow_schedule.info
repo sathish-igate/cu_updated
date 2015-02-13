@@ -1,0 +1,16 @@
+project = "state_flow"
+core = "7.x"
+name = State Flow Schedule
+version = "7.x-3.x"
+description = Scheduling of publishing, unpublishing with State Flow
+dependencies[] = state_flow
+dependencies[] = date_popup
+dependencies[] = entity
+package = "State Machine"
+
+; Information added by Drupal.org packaging script on 2014-07-30
+version = "7.x-3.x-dev"
+core = "7.x"
+project = "state_machine"
+datestamp = "1406740729"
+

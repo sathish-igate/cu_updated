@@ -1,0 +1,280 @@
+<?php
+
+/**
+ * Implemenation of hook_menu().
+ */
+function pub_releases_menu() {
+  $items['admin/utilities/build_release'] = array(
+    'title' => 'Build Release',
+    'description' => 'Build releases and specify the destination to which to push the code.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('pub_releases_release_form'),
+    'access arguments' => array('use publisher utilities'),
+  );
+
+  return $items;
+}
+
+/**
+ * Form builder for the mush and push tool.
+ */
+function pub_releases_release_form($form, &$form_state) {
+  $pub_core_repo_name = variable_get('pub_utilities_github_pubcore_repo_name', '');
+
+  // Get existing values of Pub Core form elements used during AJAX callbacks.
+  $pub_core_repos = _pub_utilities_github_get_forks($pub_core_repo_name);
+  $pub_core_repo = isset($form_state['values']['pub_core_source']['repository']) ? $form_state['values']['pub_core_source']['repository'] : '';
+  $pub_core_tags_branches = array();
+  if (!empty($pub_core_repo)) {
+    $pub_core_tags = _pub_utilities_github_get_refs('tags', $pub_core_repos[$pub_core_repo]->owner->login, $pub_core_repos[$pub_core_repo]->name);
+    $pub_core_branches = _pub_utilities_github_get_refs('branches', $pub_core_repos[$pub_core_repo]->owner->login, $pub_core_repos[$pub_core_repo]->name);
+    $pub_core_tags_branches = array_merge($pub_core_tags, $pub_core_branches);
+  }
+
+  // Get existing values of Site form elements used during AJAX callbacks.
+  $site_names = publisher_utilities_sites();
+  $site_name = isset($form_state['values']['site_source']['site_name']) ? $form_state['values']['site_source']['site_name'] : '';
+  $site_repos = !empty($site_name) ? _pub_utilities_github_get_forks($pub_core_repo_name . '_' . $site_name) : array();
+  $site_repo = isset($form_state['values']['site_source']['repository']) ? $form_state['values']['site_source']['repository'] : '';
+  $site_tags_branches = array();
+  if (!empty($site_repo)) {
+    $site_tags = _pub_utilities_github_get_refs('tags', $site_repos[$site_repo]->owner->login, $site_repos[$site_repo]->name);
+    $site_branches = _pub_utilities_github_get_refs('branches', $site_repos[$site_repo]->owner->login, $site_repos[$site_repo]->name);
+    $site_tags_branches = array_merge($site_tags, $site_branches);
+  }
+  $destinations = publisher_utilities_destinations($site_name, TRUE);
+
+  $form = array(
+    '#attributes' => array(
+      'id' => 'release_form',
+      'class' => array('clearfix'),
+    ),
+    '#attached' => array(
+      'css' => array(
+        drupal_get_path('module', 'pub_releases') . '/pub_releases.css',
+      ),
+    ),
+  );
+  $form['title'] = array(
+    '#markup' => '<h3>' . t('Build a Release') . '</h3>',
+  );
+
+  $form['pub_core_source'] = array(
+    '#type' => 'fieldset',
+    '#description' => t('Choose which Publisher Core distribution source repository and tag or branch to use.'),
+    '#collabsible' => FALSE,
+    '#title' => 'Source: Publisher Core',
+    '#tree' => TRUE,
+  );
+  $form['pub_core_source']['repository'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($pub_core_repos)),
+    '#title' => t('Repository'),
+    '#required' => TRUE,
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_releases_release_form_ajax_callback',
+      'wrapper' => 'release_form',
+    ),
+  );
+  $form['pub_core_source']['tag_or_branch'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($pub_core_tags_branches)),
+    '#title' => t('Tag or Branch'),
+    '#required' => TRUE,
+    '#empty_option' => empty($pub_core_tags_branches) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="pub_core_source[repository]"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+
+  $form['site_source'] = array(
+    '#type' => 'fieldset',
+    '#description' => t('Choose which site, source repository and tag or branch to use.'),
+    '#collabsible' => FALSE,
+    '#title' => 'Source: site',
+    '#tree' => TRUE,
+  );
+  $form['site_source']['site_name'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc($site_names),
+    '#title' => t('Name'),
+    '#required' => TRUE,
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_releases_release_form_ajax_callback',
+      'wrapper' => 'release_form',
+    ),
+  );
+  $form['site_source']['repository'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($site_repos)),
+    '#title' => t('Repository'),
+    '#required' => TRUE,
+    '#empty_option' => empty($site_name) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="site_source[site_name]"]' => array('filled' => TRUE),
+      ),
+    ),
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => '_pub_releases_release_form_ajax_callback',
+      'wrapper' => 'release_form',
+    ),
+  );
+  $form['site_source']['tag_or_branch'] = array(
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array_keys($site_tags_branches)),
+    '#title' => t('Tag or Branch'),
+    '#required' => TRUE,
+    '#empty_option' => empty($site_name) || empty($site_repo) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="site_source[repository]"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+
+  $form['destination'] = array(
+    '#type' => 'fieldset',
+    '#description' => t('The combined repository will be pushed to the selected cloud-based destination.'),
+    '#collabsible' => FALSE,
+    '#title' => 'Destination',
+    '#tree' => TRUE,
+  );
+  $form['destination']['repository'] = array(
+    '#type' => 'select',
+    '#options' => !empty($destinations) ? drupal_map_assoc($destinations) : array(),
+    '#title' => t('Repository'),
+    '#required' => TRUE,
+    '#empty_option' => empty($site_name) ? t('- Disabled -') : t('- Select -'),
+    '#states' => array(
+      'enabled' => array(
+        ':input[name="site_source[site_name]"]' => array('filled' => TRUE),
+      ),
+    ),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Build Release'),
+  );
+  $form['reset'] = array(
+    '#type' => 'submit',
+    '#value' => t('Clear Build Files'),
+    '#submit' => array('pub_releases_release_form_submit'),
+    '#limit_validation_errors' => array(),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit function for the Build Release Form.
+ */
+function pub_releases_release_form_submit($form, $form_state) {
+  switch ($form_state['clicked_button']['#value']) {
+    case t('Build Release'):
+      $batch = _pub_releases_build_batch($form_state['values']);
+      batch_set($batch);
+      break;
+
+    case t('Clear Build Files'):
+      $batch = _pub_releases_clear_batch();
+      batch_set($batch);
+      break;
+  }
+}
+
+/**
+ * Provide information for the process of clearing build files.
+ *
+ * @return array
+ *   An associative array providing information on the clear process.
+ */
+function _pub_releases_clear_batch() {
+  $batch = array(
+    'title' => t('Clearing all build files.'),
+    'operations' => array(
+      array('pub_releases_clear_files', array()),
+    ),
+    'finished' => 'pub_releases_clear_batch_complete',
+    'file' => drupal_get_path('module', 'pub_releases') . '/pub_releases.batch.inc',
+  );
+
+  return $batch;
+}
+
+/**
+ * Create the batch operation for the build release utility.
+ */
+function _pub_releases_build_batch($values) {
+  // Get form values for each fieldset.
+  $pub_core_source = $values['pub_core_source'];
+  $site_source = $values['site_source'];
+  $destination = $values['destination'];
+
+  // Get the git repo urls for each of the three repos.
+  $destinations = publisher_utilities_destinations($site_source['site_name']);
+  $credentials = variable_get('github_credentials', '');
+  $pub_core_git_repo_url = 'https://' . $credentials . '@github.com/' . $pub_core_source['repository'] . '.git';
+  $site_git_repo_url = 'https://' . $credentials . '@github.com/' . $site_source['repository'] . '.git';
+  $destination_git_repo_url = $destinations[$destination['repository']];
+
+  $batch = array(
+    'title' => t('Releasing to %destination', array('%destination' => $destination['repository'])),
+    'operations' => array(
+      array('pub_releases_clone_repo',
+        array(
+          $site_source['site_name'],
+          $pub_core_source['repository'],
+          $pub_core_git_repo_url,
+          $pub_core_source['tag_or_branch'],
+        )),
+      array('pub_releases_clone_repo',
+        array(
+          $site_source['site_name'],
+          $site_source['repository'],
+          $site_git_repo_url,
+          $site_source['tag_or_branch'],
+        )),
+      array('pub_releases_clone_repo',
+        array(
+          $site_source['site_name'],
+          $destination['repository'],
+          $destination_git_repo_url,
+          '',
+        )),
+      array('pub_releases_sync_code',
+        array(
+          $site_source['site_name'],
+          $pub_core_source['repository'],
+          $site_source['repository'],
+          $destination['repository'],
+        )),
+      array('pub_releases_create_tag',
+        array(
+          $site_source['site_name'],
+          $destination['repository'],
+          $pub_core_source['tag_or_branch'],
+          $site_source['tag_or_branch'],
+        )),
+      array('pub_releases_sync_db', array($values)),
+      array('pub_releases_sync_files', array($values)),
+    ),
+    'finished' => 'pub_releases_build_batch_complete',
+    'file' => drupal_get_path('module', 'pub_releases') . '/pub_releases.batch.inc',
+  );
+
+  return $batch;
+}
+
+/**
+ * Callback function refreshes the build release form.
+ */
+function _pub_releases_release_form_ajax_callback($form, $form_state) {
+  return $form;
+}

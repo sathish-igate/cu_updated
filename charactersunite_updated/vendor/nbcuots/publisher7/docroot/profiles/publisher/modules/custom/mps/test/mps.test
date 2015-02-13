@@ -1,0 +1,159 @@
+<?php
+
+/**
+ * @file
+ * Tests for mps.module.
+ */
+
+class MPSTestCase extends PublisherWebTestCase {
+  /**
+   * The admin user that will be created.
+   */
+  protected $admin;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'MPS parameters',
+      'description' => 'Verify MPS parameter values',
+      'group' => 'MPS',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('mps');
+  }
+
+  /**
+   * Log in users, ...
+   */
+  public function testMPS() {
+
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Set a value to more than 500 characters.
+    $site_override = $this->randomName(525);
+    variable_set('mps_site_override', $site_override);
+
+    // Create a new media gallery node.
+    // Give it a title and add a tag in Additional Information.
+    $title = $this->randomName(8);
+    $tag = $this->randomName(5);
+    $edit = array(
+      'title' => $title,
+      'field_content_tags[und]' => $tag,
+    );
+    $this->drupalPost('node/add/media-gallery', $edit, t('Save'));
+    
+    // Check the various values of MPS.
+    $this->assertRaw('"type":"media_gallery"', 'The type parameter is set correctly.');
+    $this->assertNoRaw('"pubdate":""', 'The date parameter is not empty.');
+    $this->assertRaw('"is_content":1', 'The is_content parameter is set correctly for a node.');
+    $this->assertNoRaw('"qs":""', 'Blank values are not passed to MPS.');
+    $this->assertRaw('"site":"' . substr($site_override, 0, 500) . '"', 'The MPS values are truncated to 500 characters.');
+
+    // Go to taxonomy term created.
+    $this->drupalGet("tags/$tag");
+    $this->assertRaw('"type":"other"', 'The type parameter is set correctly to other.');
+    $this->assertRaw('"is_content":0', 'The is_content parameter is set correctly for a view.');
+
+    $node = $this->drupalCreateNode(array('type' => 'media_gallery'));
+    $this->drupalGet('node/' . $node->nid);
+    $this->assertRaw('"pubdate":"' . $node->created . '"', 'The pubdate parameter is set correctly.');
+
+    // Test to see if requirements are met.
+    // @see mps_requirements()
+    // @see mps_page_alter()
+    $this->drupalGet('admin/reports/status');
+    $this->assertText('The Pixelman module is disabled, all is well.');
+
+    // Enable the Pixelman module.
+    $edit = array();
+    $edit['modules[Publisher][pixelman][enable]'] = TRUE;
+    $this->drupalPost('admin/modules', $edit, t('Save configuration'));
+    $this->resetAll();
+    $this->assertTrue(module_exists('pixelman'), 'Pixelman module enabled.');
+
+    // Test to see if requirements are not met.
+    $this->drupalGet('admin/reports/status');
+    $this->assertText('The Pixelman module is enabled, it should not be if MPS is, disable Pixelman.');
+    $this->drupalGet('admin/config/services/mps');
+    $this->assertText('The Pixelman module is enabled, it should not be if MPS is, disable Pixelman.');
+  }
+
+  /**
+   * Test the cat property.
+   */
+  public function testMpsCategory() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Check source that the envelope is empty to start with.
+    $edit = array(
+      'mps_cat_pattern' => '[mps:cat-pattern:?]',
+    );
+    $this->drupalPost('admin/config/services/mps', $edit, t('Save configuration'));
+
+    $this->drupalGet("/");
+    $this->assertRaw('"cat":""', 'The cat parameter is empty');
+
+    // Create a new media gallery node
+    $title = $this->randomName(8);
+    $edit = array(
+      'title' => $title,
+    );
+    $this->drupalPost('node/add/media-gallery', $edit, t('Save'));
+
+    $this->assertRaw('"cat":"' . strtolower($title) . '"', 'The cat parameter matches the expected pattern.');
+
+    // Do some checking on the supplied business logic.
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show/season/episode/cast'));
+    $this->assertEqual($category, 'brand|show|season|episode|cast', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show//episode/cast'));
+    $this->assertEqual($category, 'brand|show|~|episode|cast', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show/season/episode/'));
+    $this->assertEqual($category, 'brand|show|season|episode', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show/season//episode//'));
+    $this->assertEqual($category, 'brand|show|season|~|episode', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => '/show/season//'));
+    $this->assertEqual($category, '~|show|season', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => '/show///'));
+    $this->assertEqual($category, '~|show', 'The cat parameter matches the expected pattern.');
+
+    $category = _mps_build_cat(array('aliased-path' => '/brand/season//episode'));
+    $this->assertEqual($category, '~|brand|season|~|episode', 'The cat parameter matches the expected pattern.');
+
+    variable_set('mps_cat_pattern', '[mps:cat-pattern:2]|[mps:cat-pattern:3]');
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show/season/episode/cast'));
+    $this->assertEqual($category, 'season|episode', 'The cat parameter matches the expected pattern.');
+
+    variable_set('mps_cat_pattern', '[mps:cat-pattern:0]|[mps:cat-pattern:2]|[current-date:custom:Y]|[mps:cat-pattern:3]|');
+    $category = _mps_build_cat(array('aliased-path' => 'brand/show/season/episode/cast'));
+    $this->assertEqual($category, 'brand|season|' . date('Y') .  '|episode', 'The cat parameter matches the expected pattern.');
+  }
+
+  /**
+   * Test error pages.
+   */
+  public function testMpsError() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    // Confirm that we're passing the fact that this is an error page to MPS.
+    $this->drupalGet("/" . $this->randomName(8));
+    $this->assertRaw('"path":"ERROR/40', 'The path indicates this is an error page.');
+    $this->assertRaw('"content_id":"ERROR"', 'The content ID indicates this is an error page.');
+
+    // Ensure that we're not registering an error on admin pages.
+    $this->drupalGet("/admin");
+    $this->assertNoRaw('"path":"ERROR/40', 'Admin pages should not register an error.');
+  }
+}

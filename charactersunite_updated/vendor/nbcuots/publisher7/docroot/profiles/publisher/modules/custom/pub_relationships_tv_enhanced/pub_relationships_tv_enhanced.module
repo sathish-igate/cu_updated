@@ -1,0 +1,448 @@
+<?php
+
+/**
+ * @file
+ * pub_relationships_tv_enhanced.module
+ */
+
+use Publisher\Relationships\TV\TVRelationships;
+
+/**
+ * Implements hook_xautoload().
+ *
+ * Registers a Publisher Name space.
+ */
+function pub_relationships_tv_enhanced_xautoload($api) {
+  // @todo Move somewhere more generic, but for now this is the only usage.
+  $api->namespaceRoot('Publisher');
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function pub_relationships_tv_enhanced_menu_alter(&$items) {
+  // There is a use case where brands will have both "pub_relationships_tv" and
+  // "pub_relationships_tv_enhanced" and we don't want users to be confused
+  // about which menu item to pick to handle relationships.
+  if (module_exists('pub_relationships_tv')) {
+    unset($items['admin/config/content/relations']);
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function pub_relationships_tv_enhanced_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'dynamic_queue' && $plugin_type == 'modifier') {
+    return 'plugins/modifier';
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function pub_relationships_tv_enhanced_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function pub_relationships_tv_enhanced_field_info() {
+  return array(
+    'pub_tv_relationship_field' => array(
+      'label' => t('Pub TV Relationship'),
+      'description' => t("This field stores TV Relationships"),
+      'settings' => array(),
+      'default_widget' => 'pub_tv_relationship_widget',
+      'default_formatter' => 'pub_tv_relationship_formatter',
+      'property_type' => 'pub_tv_relationship_field',
+      'property_callbacks' => array('pub_tv_relationship_field_property_callbacks'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function pub_relationships_tv_enhanced_field_is_empty($item, $field) {
+  // A show must be provided for the field item to be considered non-empty.
+  return empty($item['show']);
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function pub_relationships_tv_enhanced_field_formatter_info() {
+  return array(
+    'pub_relationships_links' => array(
+      'label' => t('Default'),
+      'field types' => array('pub_tv_relationship_field'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function pub_relationships_tv_enhanced_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  // Default formatter, Extremely Basic. No-one should really use this on a
+  // site. This is a good example formatter.
+  switch ($display['type']) {
+    case 'pub_relationships_links':
+      foreach ($items as $delta => $item) {
+        $item_list = array();
+        $show = node_load($item['show']);
+        $item_list[] = t('Show') . ': ' . l($show->title, 'node/' . $show->nid);
+        if (!empty($item['season'])) {
+          $season = node_load($item['season']);
+          $item_list[] = t('Season') . ': ' . l($season->title, 'node/' . $season->nid);
+        }
+        if (!empty($item['episode'])) {
+          $episode = node_load($item['episode']);
+          $item_list[] = t('Episode') . ': ' . l($episode->title, 'node/' . $episode->nid);
+        }
+        $element[$delta] = theme('item_list', array('items' => $item_list));
+      }
+      break;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function pub_relationships_tv_enhanced_field_widget_info() {
+  return array(
+    'pub_tv_relationship_widget' => array(
+      'label' => t('Pub TV Widget'),
+      'field types' => array('pub_tv_relationship_field'),
+      'settings' => array(
+        'depth' => '3',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function pub_relationships_tv_enhanced_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+
+  $form['depth'] = array(
+    '#type' => 'select',
+    '#title' => t('TV Relationship Widget Depth'),
+    '#default_value' => $settings['depth'],
+    '#options' => array(
+      '1' => t('Show'),
+      '2' => t('Season'),
+      '3' => t('Episode'),
+    ),
+  );
+
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function pub_relationships_tv_enhanced_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $widget = $instance['widget'];
+
+  $element += array(
+    '#type' => 'fieldset',
+    '#attributes' => array(
+      'class' => array('pub-relationship-enhanced-wrapper'),
+    ),
+    '#attached' => array(
+      'css' => array(
+        drupal_get_path('module', 'pub_relationships_tv_enhanced') . '/css/field.css',
+      ),
+    ),
+  );
+
+  // Let the TVRelationships class handle most of the logic for us.
+  // This helps us with our function namespace and to keep it simple here.
+  $tv_relationship = new TVRelationships($field, $form, $form_state, $items, $delta, $langcode);
+
+  $element['show'] = array(
+    '#title' => t('Show'),
+    '#type' => 'select',
+    '#default_value' => $tv_relationship->default_value('show'),
+    '#weight' => 1,
+    '#empty_value' => 0,
+    '#options' => $tv_relationship->options_show(),
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => 'pub_relationships_tv_enhanced_show_ajax_callback',
+    ),
+    '#required' => (!empty($instance['required']) && $instance['required'] === 1),
+  );
+
+  $element['season'] = array(
+    '#title' => t('Season'),
+    '#type' => 'select',
+    '#default_value' => $tv_relationship->default_value('season'),
+    '#weight' => 2,
+    '#empty_value' => 0,
+    '#prefix' => '<div id="season-wrapper-' . $delta . '" class="season-wrapper">',
+    '#suffix' => '</div>',
+    '#options' => $tv_relationship->options_season(),
+    '#ajax' => array(
+      'event' => 'change',
+      'callback' => 'pub_relationships_tv_enhanced_season_ajax_callback',
+    ),
+    // @todo Find a better way of handling this.
+    // We set #validated to TRUE because on unlimited cardinality widgets, it
+    // throws an error of "Illegal choice has been detected" for other elements.
+    // This might be because the Ajax callback doesn't set the new elements in
+    // the $form but rather through Ajax $commands.
+    // "Changes to the form must only be made in the form builder function
+    // (ajax_example_autocheckboxes() in the example here), or validation will
+    // fail. The callback function must not alter the form or any other state."
+    // @see http://drupal.stackexchange.com/a/31486/6602
+    // @see http://drupal.stackexchange.com/questions/31846/illegal-choice-has-been-detected
+    '#validated' => TRUE,
+  );
+
+  $element['episode'] = array(
+    '#title' => t('Episode'),
+    '#type' => 'select',
+    '#default_value' => $tv_relationship->default_value('episode'),
+    '#weight' => 3,
+    '#empty_value' => 0,
+    '#prefix' => '<div id="episode-wrapper-' . $delta . '" class="episode-wrapper">',
+    '#suffix' => '</div>',
+    '#options' => $tv_relationship->options_episode(),
+  );
+
+  $element['#element_validate'][] = 'pub_relationships_tv_field_widget_validate';
+
+  // Lets do the widget settings last.
+  if ($widget['settings']['depth'] == 1) {
+    // No need for season or episode.
+    unset($element['show']['#ajax']);
+    $element['season']['#access'] = FALSE;
+    $element['episode']['#access'] = FALSE;
+  }
+
+  if ($widget['settings']['depth'] == 2) {
+    // No need for episode.
+    unset($element['season']['#ajax']);
+    $element['episode']['#access'] = FALSE;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_mps_add_cags().
+ */
+function pub_relationships_tv_enhanced_mps_add_cags(Drupal\MPS\cagsArray $cags_array, $entity) {
+  foreach (field_info_instances($entity->entity_type, $entity->bundle) as $field_name => $field_instance) {
+    $field_info = field_info_field($field_name);
+
+    // Add any referenced show|season|episode titles to the mps cag array.
+    if ($field_info['type'] == 'pub_tv_relationship_field' && isset($entity->{$field_info['field_name']})) {
+      $wrapper = entity_metadata_wrapper($entity->entity_type, $entity);
+      if ($show_season_episode_nids = $wrapper->{$field_info['field_name']}->value()) {
+        foreach ($show_season_episode_nids as $cag_name => $nid) {
+          if (!empty($nid)) {
+            $title = db_select('node', 'n')
+              ->fields('n', array('title'))
+              ->condition('nid', $nid)
+              ->execute()
+              ->fetchField();
+            $cags_array->addCag($cag_name, $title);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Use to set default value for non-accessible form elements.
+ *
+ * In the case where the widget is only displaying Show, or Show & Season the
+ * other form elements still need at least a 0.
+ *
+ * @param array $element
+ * @param array $form_state
+ * @param array $form
+ *
+ * @see pub_relationships_tv_enhanced_field_widget_form()
+ */
+function pub_relationships_tv_field_widget_validate($element, &$form_state, $form) {
+  if (isset($element['season']['#access']) && $element['season']['#access'] === FALSE) {
+    $season = $element;
+    $season['#parents'][] = 'season';
+    form_set_value($season, 0, $form_state);
+  }
+  if (isset($element['episode']['#access']) && $element['episode']['#access'] === FALSE) {
+    $episode = $element;
+    $episode['#parents'][] = 'episode';
+    form_set_value($episode, 0, $form_state);
+  }
+
+  // Work around to keep old field working.
+  if (module_exists('pub_relationships_tv')) {
+    // Move Field Collection values if the field exists. We can hard-code this
+    // Since they're hard-coded in the pub_relationships_tv module.
+    // Note: Field collection seems to care about WAYYYYYY to many values.
+    $field_collection_show_parents_input = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_show', LANGUAGE_NONE);
+    $field_collection_show_parents_values = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_show', LANGUAGE_NONE, 0, 'target_id');
+    $field_collection_season_parents_input = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_season', LANGUAGE_NONE);
+    $field_collection_season_parents_values = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_season', LANGUAGE_NONE, 0, 'target_id');
+    $field_collection_episode_parents_input = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_episode', LANGUAGE_NONE);
+    $field_collection_episode_parents_values = array('field_pub_relation_tv_shows', LANGUAGE_NONE, 0, 'field_episode', LANGUAGE_NONE, 0, 'target_id');
+
+
+    $values = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+    $field_collection_entity = drupal_array_get_nested_value($form_state['field'], array('field_pub_relation_tv_shows', LANGUAGE_NONE, 'entity', 0));
+
+    // DO NOT USE form_set_value(), field_collection doesn't use
+    // form_state['values'].
+    // Show Widget.
+    drupal_array_set_nested_value($form_state['input'], $field_collection_show_parents_input, $values['show'], TRUE);
+    drupal_array_set_nested_value($form_state['values'], $field_collection_show_parents_values, $values['show'], TRUE);
+    $field_collection_entity->field_show[LANGUAGE_NONE][0]['target_id'] = $values['show'];
+
+    // Season Widget.
+    drupal_array_set_nested_value($form_state['input'], $field_collection_season_parents_input, $values['season'], TRUE);
+    drupal_array_set_nested_value($form_state['values'], $field_collection_season_parents_values, $values['season'], TRUE);
+    $field_collection_entity->field_season[LANGUAGE_NONE][0]['target_id'] = $values['season'];
+
+    // Episode Widget.
+    drupal_array_set_nested_value($form_state['input'], $field_collection_episode_parents_input, $values['episode'], TRUE);
+    drupal_array_set_nested_value($form_state['values'], $field_collection_episode_parents_values, $values['episode'], TRUE);
+    $field_collection_entity->field_episode[LANGUAGE_NONE][0]['target_id'] = $values['episode'];
+  }
+}
+
+/**
+ * Ajax callback for TV Show.
+ *
+ * @param $form
+ * @param $form_state
+ *
+ * @return array
+ */
+function pub_relationships_tv_enhanced_show_ajax_callback($form, &$form_state) {
+  // We want to replace both the season and the episodes so we return a list
+  // of Ajax commands.
+  $parents = $form_state['triggering_element']['#array_parents'];
+  array_pop($parents);
+  $element = drupal_array_get_nested_value($form, $parents);
+  $delta = array_pop($parents);
+
+  $commands = array();
+  $commands[] = ajax_command_replace('#season-wrapper-' . $delta, drupal_render($element['season']));
+  $commands[] = ajax_command_replace('#episode-wrapper-' . $delta, drupal_render($element['episode']));
+
+  return array(
+    '#type' => 'ajax',
+    '#commands' => $commands,
+  );
+}
+
+/**
+ * Ajax callback for TV Season.
+ *
+ * @param $form
+ * @param $form_state
+ *
+ * @return array
+ */
+function pub_relationships_tv_enhanced_season_ajax_callback($form, &$form_state) {
+  // We want to replace both the season and the episodes so we return a list
+  // of Ajax commands.
+  $parents = $form_state['triggering_element']['#array_parents'];
+  array_pop($parents);
+  $element = drupal_array_get_nested_value($form, $parents);
+  $delta = array_pop($parents);
+
+  $commands = array();
+  $commands[] = ajax_command_replace('#episode-wrapper-' . $delta, drupal_render($element['episode']));
+
+  return array(
+    '#type' => 'ajax',
+    '#commands' => $commands,
+  );
+}
+
+/**
+ * Implements property callback for our Pub TV Relationship field.
+ *
+ * @see pub_relationships_tv_enhanced_field_info()
+ * @see entity_metadata_field_entity_property_info()
+ *
+ * @code
+ *   // Returns array with value for field.
+ *   $wrapper = entity_metadata_wrapper('node', $node);
+ *   $wrapper->field_tv_shows->value()['show'];
+ *   $wrapper->field_tv_shows->value()['season'];
+ *   $wrapper->field_tv_shows->value()['episode'];
+ * @endcode
+ */
+function pub_tv_relationship_field_property_callbacks(&$info, $entity_type, $field, $instance, $field_type) {
+  $property = &$info[$entity_type]['bundles'][$instance['bundle']]['properties'][$field['field_name']];
+  $property['getter callback'] = 'entity_metadata_field_verbatim_get';
+  $property['setter callback'] = 'entity_metadata_field_verbatim_set';
+  $property['property info']['show'] = array(
+    'type' => 'text',
+    'label' => t('Show'),
+    'setter callback' => 'entity_property_verbatim_set',
+  );
+  $property['property info']['season'] = array(
+    'type' => 'text',
+    'label' => t('Season'),
+    'setter callback' => 'entity_property_verbatim_set',
+  );
+  $property['property info']['episode'] = array(
+    'type' => 'text',
+    'label' => t('Episode'),
+    'setter callback' => 'entity_property_verbatim_set',
+  );
+}
+
+/**
+ * Implements hook_node_delete().
+ */
+function pub_relationships_tv_enhanced_node_delete($node) {
+  if ($node->type == 'tv_show') {
+    $fields = field_read_fields(array('type' => 'pub_tv_relationship_field'));
+    foreach ($fields as $field) {
+      $table = _field_sql_storage_tablename($field);
+      db_delete($table)->condition($field['field_name'] . '_show', $node->nid)->execute();
+      $table = _field_sql_storage_tablename($field);
+      db_delete($table)->condition($field['field_name'] . '_show', $node->nid)->execute();
+    }
+  }
+  if ($node->type == 'tv_season') {
+    $fields = field_read_fields(array('type' => 'pub_tv_relationship_field'));
+    foreach ($fields as $field) {
+      $table = _field_sql_storage_tablename($field);
+      db_update($table)->fields(array($field['field_name'] . '_season' => 0))->condition($field['field_name'] . '_season', $node->nid)->execute();
+      $table = _field_sql_storage_revision_tablename($field);
+      db_update($table)->fields(array($field['field_name'] . '_season' => 0))->condition($field['field_name'] . '_season', $node->nid)->execute();
+    }
+  }
+  if ($node->type == 'tv_episode') {
+    $fields = field_read_fields(array('type' => 'pub_tv_relationship_field'));
+    foreach ($fields as $field) {
+      $table = _field_sql_storage_tablename($field);
+      db_update($table)->fields(array($field['field_name'] . '_show' => 0))->condition($field['field_name'] . '_episode', $node->nid)->execute();
+      $table = _field_sql_storage_revision_tablename($field);
+      db_update($table)->fields(array($field['field_name'] . '_show' => 0))->condition($field['field_name'] . '_episode', $node->nid)->execute();
+    }
+  }
+}

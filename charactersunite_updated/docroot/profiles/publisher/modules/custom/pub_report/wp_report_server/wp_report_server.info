@@ -1,0 +1,10 @@
+name = Wordpress Report Server
+description = Gather reports from NBCUPress sites through an API.
+core = 7.x
+package = Publisher
+project = wp_report_server
+php = 5.2.4
+version = 7.x-2.0
+dependencies[] = pub_report_server
+files[] = views/wp_report_server_handler_filter_sitename.inc
+files[] = views/wp_report_server_handler_filter_modules.inc

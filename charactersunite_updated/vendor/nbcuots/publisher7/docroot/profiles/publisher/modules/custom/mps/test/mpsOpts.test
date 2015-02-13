@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Tests for mps.module.
+ */
+class MPSPOptsTestCase extends PublisherWebTestCase {
+  /**
+   * The admin user that will be created.
+   */
+  protected $admin;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'MPS Options',
+      'description' => 'Verify MPS options values',
+      'group' => 'MPS',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('mps');
+  }
+
+  /**
+   * Log in users, ...
+   */
+  public function testMPS() {
+    // Login the admin user.
+    $this->admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($this->admin);
+
+    $array = array(
+      array('name' => 'key', 'value' => '2', 'json' => 0),
+      array('name' => 'key2', 'value' => 'string2', 'json' => 0),
+      array('name' => 'key3', 'value' => '87', 'json' => 0),
+      array('name' => 'key3', 'value' => '{"key":"value"}', 'json' => 1),
+      array('name' => 'badjson', 'value' => '{"key":"value"', 'json' => 1),
+
+    );
+    variable_set('mps_variables', $array);
+
+
+    $this->drupalGet('<front>');
+
+    // Assert that the mpsopts script values are as expected.
+    $this->assertRaw('"badjson":""', 'Incorrect json flagged as json is not printed');
+    $this->assertRaw('"key3":{"key":"value"}', 'Correct json flagged as json is printed as actual json');
+    $this->assertRaw('"host":"mps.nbcuni.com","key":2', 'MPSOPTS appear next to the host key.');
+
+    // Assert the bad json throws an error on the admin configuration page.
+    $this->drupalGet('admin/config/services/mps');
+    $this->drupalPost(NULL, array(), t('Save configuration'));
+
+    $this->assertText(t('If the json checkbox is checked, this must be a valid json object.'), 'Invalid json is not allowed.');
+
+  }
+}

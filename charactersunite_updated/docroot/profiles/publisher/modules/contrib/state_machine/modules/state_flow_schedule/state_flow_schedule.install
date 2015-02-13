@@ -1,0 +1,108 @@
+<?php
+
+/**
+ * @file
+ * Install file for state_flow_schedule.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function state_flow_schedule_schema() {
+  $schema = array();
+
+  $schema['state_flow_schedule'] = array(
+    'description' => '',
+    'fields' => array(
+      'sid' => array(
+        'description' => 'The id of the scheduled data row.',
+        'type' => 'serial',
+        'not null' => TRUE,
+      ),
+      'entity_type' => array(
+        'description' => 'The type of entity to be published.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'entity_id' => array(
+        'description' => 'The id of the entity to be published.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'revision_id' => array(
+        'description' => 'The revision id of the entity.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'date' => array(
+        'description' => 'The date value.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'source_event' => array(
+        'description' => 'The name of the event that scheduled the call.',
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 255,
+      ),
+      'target_event' => array(
+        'description' => 'The name of the event to call.',
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 255,
+      ),
+    ),
+    'primary key' => array('sid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Make the table schema entity type agnostic.
+ */
+function state_flow_schedule_update_7000() {
+  $schema = state_flow_schedule_schema();
+  if (db_field_exists('state_flow_schedule', 'nid')) {
+    db_change_field('state_flow_schedule', 'nid', 'entity_id', $schema['state_flow_schedule']['fields']['entity_id']);
+  }
+  if (db_field_exists('state_flow_schedule', 'vid')) {
+    db_change_field('state_flow_schedule', 'vid', 'revision_id', $schema['state_flow_schedule']['fields']['revision_id']);
+  }
+  if (!db_field_exists('state_flow_schedule', 'entity_type')) {
+    db_add_field('state_flow_schedule', 'entity_type', $schema['state_flow_schedule']['fields']['entity_type']);
+    db_update('state_flow_schedule')
+      ->fields(array('entity_type' => 'node'))
+      ->execute();
+  }
+}
+
+/**
+ * Update the state_flow_schedule table to allow scheduling custom events.
+ */
+function state_flow_schedule_update_7001() {
+  $schema = state_flow_schedule_schema();
+  foreach (array('source_event', 'target_event') as $field_name) {
+    if (isset($schema['state_flow_schedule']['fields'][$field_name]) && !db_field_exists('state_flow_schedule', $field_name)) {
+      db_add_field('state_flow_schedule', $field_name, $schema['state_flow_schedule']['fields'][$field_name]);
+    }
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function state_flow_schedule_install() {
+  cache_clear_all();
+  $t = get_t();
+  return $t('Registry and cache have been rebuilt.');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function state_flow_schedule_uninstall() {
+  cache_clear_all();
+  return st('Registry and cache have been rebuilt.');
+}

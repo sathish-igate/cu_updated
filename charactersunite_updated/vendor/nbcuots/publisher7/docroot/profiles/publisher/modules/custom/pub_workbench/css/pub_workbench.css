@@ -1,0 +1,80 @@
+.ctools-dropbutton-processed {
+  position: relative;
+}
+.state-flow--is-published--yes td {
+  background: none;
+}
+.views-field-state div {
+  background-repeat: no-repeat;
+  background-position: 0 2px;
+  background-size: 16px;
+  padding: 0 0 0 19px;
+}
+.state-Draft .queues-revision--active,
+.state-Unpublished  .queues-revision--active {
+  display: none;
+}
+/* STATUS: PUBLISHED */
+.state-Published .views-field-state {
+  background: #B7DEA7;
+}
+.state-Published .views-field-state div {
+  background-image: url( ../images/ico_published.png );
+}
+/* STATUS: DRAFT */
+.state-Draft .views-field-state {
+  background: #729ACE;
+  color: #ffffff;
+}
+.state-Draft .views-field-state div {
+  background-image: url( ../images/ico_draft.png );
+}
+/* STATUS: SCHEDULED */
+.state-Scheduled .views-field-state {
+  background: #FFE5AD;
+}
+.state-Scheduled .views-field-state div {
+  background-image: url( ../images/ico_scheduled.png );
+}
+/* STATUS: UNPUBLISHED */
+.state-Unpublished .views-field-state {
+  background: #FDB9BB;
+}
+.state-Unpublished .views-field-state div {
+  background-image: url( ../images/ico_unpublished.png );
+}
+.views-field-state-flow-events-form {
+  display: none;
+}
+/* STATE REVISION FORM */
+#revision-form-table .revision-form {
+  background: #F3F4EE;
+  border-bottom: 1px solid #BEBFB9;
+  border-top: 1px solid #BEBFB9;
+}
+#revision-form-table .form-item {
+  float: left;
+  margin: 0 15px 0 0;
+}
+#revision-form-table label {
+  float: left;
+  margin: 0 10px 0 0;
+}
+#revision-form-table .form-textarea-wrapper {
+  overflow: hidden;
+  display: inline-block;
+}
+#revision-form-table .form-textarea-wrapper textarea {
+  width: 500px;
+  height: 26px;
+}
+/* HISTORY COLUMN */
+.views-field-history-list p span {
+  font-weight: bold;
+}
+
+/* Padding for Views' date picker fields */
+#views-exposed-form-pub-workbench-scheduled-content-page .form-type-date-popup .form-item-time-scheduled-date,
+#views-exposed-form-pub-workbench-scheduled-videos-page .form-type-date-popup .form-item-time-scheduled-date {
+  padding-top: 9px;
+}

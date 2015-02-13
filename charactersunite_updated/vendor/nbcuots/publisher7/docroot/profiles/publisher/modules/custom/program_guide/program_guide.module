@@ -1,0 +1,169 @@
+<?php
+/**
+ * @file
+ * The module file for Program Guide.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function program_guide_menu() {
+  $items['admin/config/services/program_guide'] = array(
+    'title' => 'Program Guide',
+    'type' => MENU_NORMAL_ITEM,
+    'description' => 'Configuration settings for the site\'s program guide.',
+    'access arguments' => array('administer site configuration'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('program_guide_configuration_form'),
+    'file' => 'program_guide.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function program_guide_entity_info() {
+  $info = array(
+    'program' => array(
+      'label' => t('Program'),
+      'plural label' => t('Programs'),
+      'entity class' => 'programEntity',
+      'controller class' => 'EntityAPIController',
+      'base table' => 'programs',
+      'fieldable' => FALSE,
+      'entity keys' => array(
+        'id' => 'guid',
+        'label' => 'title',
+      ),
+      'bundles' => array(),
+      'label callback' => 'entity_class_label',
+      'uri callback' => 'entity_class_uri',
+      'module' => 'program_guide',
+      'view modes' => array(),
+    ),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function program_guide_cron() {
+  $interval = variable_get('program_guide_update_interval', 24) * 60 * 60;
+  $last_ran = variable_get('program_guide_last_update', 0);
+
+  // Add new programs to the import queue.
+  if (time() - $last_ran >= $interval) {
+    $program_data = _program_guide_import_data();
+    if ($program_data) {
+      $queue = DrupalQueue::get('programGuideQueue');
+
+      foreach ($program_data['entries'] as $entry) {
+        $queue->createItem($entry);
+      }
+    }
+
+    variable_set('program_guide_last_update', time());
+  }
+
+  // Delete old programs.
+  $interval = variable_get('program_guide_delete_after_interval', 0) * 60 * 60;
+  if ($interval) {
+    db_delete('programs', array())
+      ->condition('start_time', time() - $interval, '<=')
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function program_guide_cron_queue_info() {
+  $queues = array();
+  $queues['programGuideQueue'] = array(
+    'worker callback' => 'program_guide_program_save',
+    'time' => 15,
+  );
+
+  return $queues;
+}
+
+/**
+ * Save an individual Program entity with data from the feed.
+ *
+ * @param object $program
+ *   The program object from the feed (typically this is converted from JSON
+ *   first).
+ */
+function program_guide_program_save($program) {
+  $values = array();
+
+  // MPX converts UNIX timestamps to milliseconds so we divide start and end
+  // times by 1000.
+  $values['guid'] = check_plain($program['guid']);
+  $values['program_guid'] = check_plain($program['pllisting$program']['pl$guid']);
+  $values['title'] = check_plain($program['pllisting$program']['pl$title']);
+  $values['parent_title'] = check_plain($program['pllisting$program']['plprogram$shortTitle']);
+  $values['start_time'] = check_plain($program['pllisting$startTime']) / 1000;
+  $values['end_time'] = check_plain($program['pllisting$endTime']) / 1000;
+  $values['run_time'] = check_plain($program['pllisting$program']['plprogram$runtime']);
+  $values['series_episode_number'] = check_plain($program['pllisting$program']['plprogram$seriesEpisodeNumber']);
+  $values['season_episode_number'] = check_plain($program['pllisting$program']['plprogram$tvSeasonEpisodeNumber']);
+  $values['season_number'] = check_plain($program['pllisting$program']['plprogram$tvSeasonNumber']);
+  $values['created'] = time();
+  $values['raw'] = $program;
+
+  if (program_guide_program_exists($values['guid'])) {
+    $entities = entity_load('program', array($values['guid']));
+
+    $program = $entities[$values['guid']];
+    $program->program_guid = $values['program_guid'];
+    $program->title = $values['title'];
+    $program->parent_title = $values['parent_title'];
+    $program->start_time = $values['start_time'];
+    $program->end_time = $values['end_time'];
+    $program->run_time = $values['run_time'];
+    $program->series_episode_number = $values['series_episode_number'];
+    $program->season_episode_number = $values['season_episode_number'];
+    $program->season_number = $values['season_number'];
+    $program->raw = $values['raw'];
+  }
+  else {
+    $program = entity_create('program', $values);
+  }
+
+  entity_save('program', $program);
+}
+
+/**
+ * Given a guid check if a program entity exists.
+ *
+ * @param string $guid
+ *   The unique identifier of the program in question.
+ *
+ * @return bool
+ *   TRUE if the particular program already exists in the database.
+ */
+function program_guide_program_exists($guid) {
+  return (bool) db_query('SELECT p.guid FROM {programs} p WHERE p.guid = :guid', array(':guid' => $guid))->rowCount();
+}
+
+/**
+ * Import program guide data from the feed.
+ *
+ * @return object|FALSE
+ *   Returns the imported data object or FALSE on failure.
+ */
+function _program_guide_import_data() {
+  $feed_url = variable_get('program_guide_data_url', '');
+  $raw_data = file_get_contents($feed_url);
+  if ($raw_data === FALSE) {
+    return FALSE;
+  }
+
+  $data = drupal_json_decode($raw_data);
+  return !is_null($data) ? $data : FALSE;
+}

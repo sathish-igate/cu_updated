@@ -1,0 +1,412 @@
+<?php
+/**
+ * @file
+ * Code for the Pub media feature.
+ */
+
+include_once 'pub_media.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function pub_media_menu() {
+  $items['node/%node/item/%'] = array(
+    'title callback' => 'node_page_title',
+    'title arguments' => array(1),
+    'page callback' => 'pub_media_gallery_display_item_by_id',
+    'page arguments' => array(1, 3),
+    'access_callback' => 'node_access',
+    'access arguments' => array('view', 1),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['node/%node/index/%'] = array(
+    'title callback' => 'node_page_title',
+    'title arguments' => array(1),
+    'page callback' => 'pub_media_gallery_display_item_by_index',
+    'page arguments' => array(1, 3),
+    'access_callback' => 'node_access',
+    'access arguments' => array('view', 1),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_mps_parameters_alter().
+ */
+function pub_media_mps_parameters_alter(&$parameters) {
+  $node = menu_get_object();
+  if (isset($node->type) && $node->type == 'media_gallery' && isset($node->current_item_id)) {
+    $parameters['envelope'] = $node->nid;
+  }
+}
+
+/**
+ * Page callback for node/%node/item/%.
+ *
+ * Displays a gallery item by supplied ID.
+ * @see pub_media_menu()
+ */
+function pub_media_gallery_display_item_by_id($node, $fid = NULL) {
+  _pub_media_gallery_apply_item_by_id($node, $fid);
+  return node_view($node);
+}
+
+/**
+ * Page callback for node/%node/index/%.
+ *
+ * Determines a gallery item by its index within the gallery.
+ * @see pub_media_menu()
+ */
+function pub_media_gallery_display_item_by_index($node, $index = NULL) {
+  _pub_media_gallery_apply_item_by_index($node, $index);
+  return node_view($node);
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function pub_media_node_view($node, $view_node, $langcode) {
+  if ($node->type == 'media_gallery') {
+    if (isset($node->current_item)) {
+      $node->content['current_item'] = array(
+        '#markup' => '<label>' . t('Current Item') . '</label>' . render($node->current_item),
+        '#weight' => 5,
+      );
+    }
+    if (isset($node->current_item_index)) {
+      $node->content['current_item_index'] = array(
+        '#markup' => '<label>' . t('Current Item Index') . '</label>' . render($node->current_item_index),
+        '#weight' => 6,
+      );
+    }
+    if (isset($node->current_item_id)) {
+      $node->content['current_item_id'] = array(
+        '#markup' => '<label>' . t('Current Item ID') . '</label>' . render($node->current_item_id),
+        '#weight' => 7,
+      );
+    }
+    if (isset($node->current_item_url)) {
+      $node->content['current_item_url'] = array(
+        '#markup' => '<label>' . t('Current Item URL') . '</label>' . '<a href="' . render($node->current_item_url) . '">' . render($node->current_item_url) . '</a>',
+        '#weight' => 8,
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_library_alter().
+ */
+function pub_media_library_alter(&$libraries, $module) {
+  if ($module == 'media' && isset($libraries['media_browser'])) {
+    $path = drupal_get_path('module', 'pub_media');
+    // Modified the media default js properties, Some of them are silly.
+    $libraries['media_browser']['js'][$path . '/js/pub_media.browser.js'] = array('group' => JS_DEFAULT);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Add our css/js to the file_entity_add_update form.
+ * We also add a preview image.
+ */
+function pub_media_form_file_entity_add_upload_alter(&$form, $form_state) {
+  if (isset($form['#step']) && $form['#step'] == 4) {
+    $bundle = $form['#bundle'];
+    if ($bundle === 'image') {
+      pub_media_file_entity_set_up($form, $form_state);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Removes the crop and focus form to the file/%fid/edit form.
+ * As well as other alters to address media workflow UI improvements.
+ */
+function pub_media_form_alter(&$form, &$form_state, $form_id) {
+
+  // Edit both field_entity_edit and media_edit_$NUM.
+  // The media_edit_$NUM is for when the media module does multi upload.
+  if ($form_id == 'file_entity_edit' || !(strpos($form_id, 'media_edit') === false)) {
+    if (isset($form['type']['#value']) && $form['type']['#value'] == 'image') {
+      pub_media_file_entity_set_up($form, $form_state);
+    }
+  }
+
+  // Adding the ability to apply the original metadata in case the author 
+  // decides they want to revert back to it.
+  if (module_exists('simple_exif')) {
+    if (($form_id === 'file_entity_add_upload' && isset($form['#entity']) && strstr($form['#entity']->type, "image")) ||
+      ($form_id === 'file_entity_edit' && isset($form['preview']['#file']) && strstr($form['preview']['#file']->filemime, "image"))) {
+
+      $form['actions']['simple_exif'] = array(
+        '#type' => 'button',
+        '#weight' => 50,
+        '#value' => t('Apply Embedded Metadata'),
+        '#ajax' => array(
+          'callback' => 'simple_exif_update_form_values',
+          'wrapper' => 'edit-filename',
+        ),
+        '#attached' => array(
+          'css' => array(drupal_get_path('module', 'simple_exif') . '/simple-exif.css'),
+        ),
+      );
+    }
+  }
+
+  // CSS hack for listing out entityreference live preview images in the view
+  // mode.
+  switch ($form_id) {
+    case "blog_post_node_form":
+      if (!in_array(drupal_get_path('module', 'pub_media').'/css/pub_media_views.css', $form['#attached']['css'])) {
+        $form['#attached']['css'][] = drupal_get_path('module', 'pub_media').'/css/pub_media_views.css';
+      }
+  }
+
+  // Display the URLs on the Media Gallery page, though not on "adds."  The reason:
+  // we don't have the necessary node ID on "add."
+  $action = $form['#action'];
+  if ($form_id == 'media_gallery_node_form' && strpos($action, 'add') === FALSE && isset($form['field_media_items'][LANGUAGE_NONE]['#file_upload_delta'])) {
+    $max_delta = $form['field_media_items'][LANGUAGE_NONE]['#file_upload_delta'];
+
+    for ($index = 0; $index < $max_delta; $index++) {
+      if (isset($form['field_media_items'][LANGUAGE_NONE][$index]['#default_value']['fid'])) {
+        $fid = $form['field_media_items'][LANGUAGE_NONE][$index]['#default_value']['fid'];
+        $item_url = _pub_media_generate_gallery_item_url($form['#node'], $fid);
+
+        $form['field_media_items'][LANGUAGE_NONE][$index]['#item_url'] = $item_url;
+        $form['field_media_items'][LANGUAGE_NONE][$index]['#pre_render'][] = 'pub_media_pre_render_media_item';
+      }
+    }
+  }
+
+  // Use date popup picker on admin/content/file, admin/content/content-revisions, admin/content.
+  if ($form['#id'] === 'views-exposed-form-content-files-page' || $form['#id'] === 'views-exposed-form-content-revisions-page') {
+    _pub_media_use_date_popup($form, 'timestamp');
+  }
+  if ($form['#id'] === 'views-exposed-form-content-content') {
+    _pub_media_use_date_popup($form, 'changed');
+  }
+  if ($form['#id'] === 'views-exposed-form-media-galleries-media-galleries') {
+    _pub_media_use_date_popup($form, 'changed');
+  }
+}
+
+/**
+ * Implements a pre-render handler for a media gallery item.
+ */
+function pub_media_pre_render_media_item($element) {
+  global $base_url;
+
+  $item_url = $element['#item_url'];
+  $fid = $element['fid']['#value'];
+  $element['item_url'] = array(
+    '#type' => 'item',
+    '#markup' => "<a href=\"item/$fid\">$base_url/$item_url</a>",
+    '#weight' => 50,
+  );
+
+  // If we already have a file, we don't want to show the browse and attach
+  // controls.
+  if (!empty($element['#value']['fid'])) {
+    $element['upload']['#access'] = FALSE;
+    $element['browse_button']['#access'] = FALSE;
+    $element['attach_button']['#access'] = FALSE;
+  }
+  // If we don't already have a file, there is nothing to remove.
+  else {
+    $element['remove_button']['#access'] = FALSE;
+  }
+
+  return $element;
+}
+
+function pub_media_file_entity_set_up(&$form, &$form_state) {
+  if (!isset($form['preview'])) {
+    // The initial file_entity_add_upload does not include a preview image.
+     // Problem? Solved!
+    $file = file_load($form_state['storage']['upload']);
+    $form['preview'] = file_view_file($file, 'preview');
+  }
+  if (isset($form['preview']['#access']) && $form['preview']['#access'] === FALSE) {
+    // If the preview field is disabled lets enable it.
+    // The preview is ok for everyone to view in this form.
+    $form['preview']['#access'] = TRUE;
+  }
+
+  // Add css/js.
+  $form['#attached']['css'][] = drupal_get_path('module', 'pub_media').'/css/pub_media.css';
+  $form['#attached']['js'][] = drupal_get_path('module', 'pub_media').'/js/pub_media.js';
+
+  // Show the list of available tokens.
+  $form['#group_children']['image_field_tokens'] = 'group_image_right';
+  $form['image_field_tokens'] = array(
+    '#dialog' => TRUE,
+    '#theme' => 'token_tree',
+    '#token_types' => array(
+      'file',
+      'current-user',
+      'node',
+      'user',
+    ),
+    '#weight' => 15,
+  );
+
+  // Cleans up the wysiwyg
+  $form['#after_build'][] = 'pub_media_after_build_wysiwyg_config';
+}
+
+/**
+ * Called after form is generated and contrib modules performed there deeds
+ * @see http://www.appnovation.com/drupal-tip-using-formafterbuild
+ */
+function pub_media_after_build_wysiwyg_config($form, &$form_state) {
+  // Switch to wysiwyg mini text format.
+  $form['field_caption'][LANGUAGE_NONE][0]['format']['format']['#value'] = 'wysiwyg_mini';
+  $form['field_caption'][LANGUAGE_NONE][0]['format']['help']['#access'] = FALSE;
+  $form['field_caption'][LANGUAGE_NONE][0]['format']['guidelines']['#access'] = FALSE;
+  return $form;
+}
+
+/**
+ * Implements hook_contextual_links_view_alter().
+ */
+function pub_media_contextual_links_view_alter(&$element, &$items) {
+  // Set all image files to have a contextual link to the 'Edit image focus'. It
+  // needs a query of ?image-focus=1 in order to trigger the image focus. This
+  // is acted upon in pub_media.js.
+  if (isset($element['#element']['#bundle']) && $element['#element']['#bundle'] === 'image') {
+    $file_id = $element['#element']['#file']->fid;
+    $element['#links']['image-focus'] = array(
+      'title' => t('Edit image focus'),
+      'href' => 'file/' . $file_id . '/edit',
+      'query' => array('image-focus' => 1),
+    );
+  }
+
+  // Remove contextual links in the entity reference view.
+  $view_mode = isset($element['#element']['#view_mode']) ? $element['#element']['#view_mode'] : FALSE;
+  if ($view_mode === 'entityreference_live_preview' || $view_mode === 'admin_reference_preview') {
+    unset($element['#links']);
+  }
+}
+
+/**
+ * Apply the current information to the gallery, by ID.
+ */
+function _pub_media_gallery_apply_item_by_id($node, $fid) {
+  global $base_url;
+
+  if ($fid == NULL || !is_numeric($fid)) {
+    return;
+  }
+
+  $field = 'field_media_items';
+  $gallery = _pub_media_load_gallery($node, $field);
+  if (!is_array($gallery)) {
+    return;
+  }
+
+  // Iterate through the image items and try to find one matching the FID.
+  $field_index = -1;
+  foreach ($gallery as $index => $element) {
+    if ($fid == $element['fid']) {
+      $field_index = $index;
+      break;
+    }
+  }
+  if ($field_index < 0) {
+    return;
+  }
+
+  $image_value = field_view_value('node', $node, $field, $gallery[$field_index]);
+  $node->current_item = $image_value;
+  $node->current_item_index = $field_index;
+  $node->current_item_id = $image_value['#file']->fid;
+  $node->current_item_url = $base_url . '/' . _pub_media_generate_gallery_item_url($node, $image_value['#file']->fid);
+}
+
+/**
+ * Apply the current information to the gallery, by index.
+ */
+function _pub_media_gallery_apply_item_by_index($node, $index) {
+  global $base_url;
+
+  if ($index == NULL || !is_numeric($index) || $index < 0) {
+    return node_view($node);
+  }
+
+  $field = 'field_media_items';
+  $gallery = _pub_media_load_gallery($node, $field);
+  if (!is_array($gallery) || count($gallery) <= $index) {
+    return node_view($node);
+  }
+
+  $image_value = field_view_value('node', $node, $field, $gallery[$index]);
+  $node->current_item = $image_value;
+  $node->current_item_index = $index;
+  $node->current_item_id = $image_value['#file']->fid;
+  $node->current_item_url = $base_url . '/' . _pub_media_generate_gallery_item_url($node, $image_value['#file']->fid);
+}
+
+/**
+ * Utility function for loading the gallery.
+ */
+function _pub_media_load_gallery($node, $field) {
+  $gallery = field_get_items('node', $node, $field);
+  return $gallery;
+}
+
+/**
+ * Utility function for generating the URLs for the gallery elements.
+ */
+function _pub_media_generate_gallery_item_urls($node, $field) {
+  $urls = array();
+
+  $gallery = _pub_media_load_gallery($node, $field);
+  if (!is_array($gallery)) {
+    return $urls;
+  }
+
+  foreach ($gallery as $index => $element) {
+    $urls[] = _pub_media_generate_gallery_item_url($node, $element['fid']);
+  }
+
+  return $urls;
+}
+
+/**
+ * Utility function for generating the URL of an individual gallery item.
+ */
+function _pub_media_generate_gallery_item_url($node, $fid) {
+  return 'node/' . $node->nid . '/item/' . $fid;
+}
+
+/**
+ * Utility function for applying the date popup type to the specified field.
+ */
+function _pub_media_use_date_popup(&$form, $key) {
+  $form[$key] = array(
+    '#type' => 'date_popup',
+    '#date_year_range' => '-0:+3',
+    '#default_value' => time(),
+    '#date_label_position' => 'within',
+    '#date_format' => 'm/d/Y',
+  );
+  $form['#info']['filter-' . $key]['description'] = '';
+
+  // Apply style to get fields to line up properly.
+  if (!isset($form['#attached'])) {
+    $form['#attached'] = array();
+  }
+  if (!isset($form['#attached']['css'])) {
+    $form['#attached']['css'] = array();
+  }
+  if (!in_array(drupal_get_path('module', 'pub_media').'/css/pub_media_views.css', $form['#attached']['css'])) {
+    $form['#attached']['css'][] = drupal_get_path('module', 'pub_media').'/css/pub_media_views.css';
+  }
+}

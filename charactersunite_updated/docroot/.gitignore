@@ -1,0 +1,10 @@
+# Ignore local settings files.
+sites/*/settings.local.php
+sites/sites.local.php
+
+# Ignore paths that contain user-generated content.
+sites/*/files*
+sites/*/files-private*
+
+# Ignore the config files for local SSO settings.
+sites/*/sso/*-local.inc

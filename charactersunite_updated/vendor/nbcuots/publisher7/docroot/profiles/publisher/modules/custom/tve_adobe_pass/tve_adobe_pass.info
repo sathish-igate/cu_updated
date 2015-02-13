@@ -1,0 +1,7 @@
+name = TVE Adobe Pass
+description = Provides authentication API through Adobe Pass service.
+package = NBCU TVE
+core = 7.x
+version = 7.x-3.2
+dependencies[] = jquery_update
+configure = admin/config/services/adobe-pass

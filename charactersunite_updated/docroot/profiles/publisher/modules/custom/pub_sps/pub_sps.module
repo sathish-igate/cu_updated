@@ -1,0 +1,284 @@
+<?php
+
+/**
+ * @file
+ * Publisher additions to Site Preview System (sps).
+ *
+ * This module customizes the way the sps_condition_preview_form()
+ * is rendered on the page. By default SPS will load this on every admin page
+ * with correct permissions. This quickly fills up the {cache_form} table
+ * since every form render is cached. We override this default behaviour here
+ * and instead call it via Ajax and then when in preview mode show the form
+ * on every page load so the user knows they are in preview mode.
+ *
+ * @todo Refactor this into the sps module and submit a patch to
+ * https://drupal.org/node/2193009.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function pub_sps_menu() {
+  $items['pub_sps/sps_condition_preview_form'] = array(
+    'title' => 'Render SPS Preview form',
+    'page callback' => 'pub_sps_sps_condition_preview_form_wrapper',
+    'access callback' => TRUE,
+    'delivery callback' => 'ajax_deliver',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ *
+ * Remove sps_iib_page_item() from running and implement our own version in
+ * pub_sps_iib_page_item().
+ *
+ * @todo Remove/merge this when refactoring into sps.
+ * @see https://drupal.org/node/2193009
+ */
+function pub_sps_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'iib_page_item' && isset($implementations['sps'])) {
+    unset($implementations['sps']);
+  }
+}
+
+/**
+ * Implements hook_iib_page_item().
+ *
+ * @todo Explain why.
+ */
+function pub_sps_iib_page_item() {
+  $state = sps_get_manager()->getSiteState();
+
+  if (!($state == NULL)) {
+    $manager = sps_get_manager();
+    $preview_form = $manager->getPreviewForm();
+    $items['left'] = array(
+      '#weight' => -10,
+      'form' => $preview_form,
+    );
+  }
+  // This is the element the sps_condition_preview_form() gets injected
+  // into with Ajax.
+  else {
+    $items['left'] = array(
+      '#weight' => -10,
+      '#prefix' => '<div id="iib-item">',
+      '#suffix' => '</div>',
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_forms().
+ *
+ * Dark voodoo magic in order to ultimately add a #submit handler for the
+ * sps_condition_preview_form() constructor. By doing this we get a custom
+ * alter hook for the 'pub_sps_sps_condition_preview_form_alias' form ID.
+ *
+ * @see pub_sps_form_pub_sps_sps_condition_preview_form_alias_alter()
+ */
+function pub_sps_forms() {
+  $forms = array();
+  $forms['pub_sps_sps_condition_preview_form_alias']['callback'] = 'sps_condition_preview_form';
+
+  return $forms;
+}
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Add a submit and validation handler for the
+ * 'pub_sps_sps_condition_preview_form_alias' aka sps_condition_preview_form().
+ * We cannot normally do this because when you add a submit/validation
+ * handler the normal way it is too late because the getPreviewForm() method
+ * calls drupal_get_form() directly and it is cached by the time we add them.
+ *
+ * @see pub_sps_forms()
+ * @see pub_sps_sps_condition_preview_form_validate
+ * @see pub_sps_sps_condition_preview_form_submit
+ */
+function pub_sps_form_pub_sps_sps_condition_preview_form_alias_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'pub_sps_sps_condition_preview_form_submit';
+  $form['#validate'][] = 'pub_sps_sps_condition_preview_form_validate';
+  if (!empty($form_state['values'])) {
+    unset($form['buttons']['cancel']);
+    $form['buttons']['disable_preview'] = array(
+      '#type' => 'submit',
+      '#value' => t('Disable Preview'),
+      '#weight' => 1,
+    );
+  }
+}
+
+/**
+ * Page callback for pub_sps/sps_condition_preview_form.
+ *
+ * This gets our form and sets the Ajax commands.
+ */
+function pub_sps_sps_condition_preview_form_wrapper() {
+  $form = pub_sps_sps_condition_preview_form();
+
+  $commands = array();
+  $commands[] = ajax_command_replace('#iib-item', drupal_render($form));
+
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Form builder.
+ *
+ * iib_get_page_data() would normally return the $form below. But it does so
+ * by calling the sps_iib_item_data() hook and that gets called on every
+ * page load which we don't want. This gets called with a selective Ajax
+ * request and while it takes slightly longer than rendering on the initial page
+ * load it saves considerable amount of database storage and queries.
+ *
+ * @see pub_sps_menu()
+ * @see pub_sps_sps_condition_preview_form_wrapper
+ */
+function pub_sps_sps_condition_preview_form() {
+  // Build the form.
+  if (iib_should_show_view()) {
+    $manager = sps_get_manager();
+    // This would normally have been called via the getPreviewForm() method but
+    // we couldn't use that because we couldn't add a #submit handler that way
+    // and had to do it this way.
+    // @see pub_sps_forms()
+    $root = $manager->getRootCondition();
+    // drupal_get_form() is normally called via the __call() method on the
+    // class but we wanted to bypass that so we could pass a custom form ID
+    // which allows us to create submit/validate handlers.
+    $form = drupal_get_form('pub_sps_sps_condition_preview_form_alias', $root);
+  }
+
+  return $form;
+}
+
+/**
+ * Form validation handler for pub_sps_sps_condition_preview_form().
+ *
+ * The reason we do this is because sps_condition_preview_form_validate() does
+ * a drupal_goto() on the current path which is not what we want.
+ *
+ * @see sps_condition_preview_form_validate()
+ * @see pub_sps_form_pub_sps_sps_condition_preview_form_alias_alter()
+ */
+function pub_sps_sps_condition_preview_form_validate($form, &$form_state) {
+  // If 'disable-preview' was pressed then blow away the site state and refresh.
+  if (isset($form_state['clicked_button']['#id']) && $form_state['clicked_button']['#id'] == 'edit-disable-preview') {
+    sps_get_manager()->clearSiteState();
+    drupal_goto($_SERVER['HTTP_REFERER']);
+  }
+  // Here we interrupt the flow when a user clicks the preview button without
+  // entering all of the date. Otherwise the form gets rendered and returned as
+  // a JSON object via Ajax.
+  $errors = form_get_errors();
+  if (!empty($errors)){
+    drupal_goto($_SERVER['HTTP_REFERER']);
+  }
+}
+
+/**
+ * Form submit handler for pub_sps_sps_condition_preview_form().
+ *
+ * The reason we do this is because sps_condition_preview_form_submit() does
+ * a drupal_goto() on the current path which since it is called from an Ajax
+ * handler gets the wrong path.
+ *
+ * @see sps_condition_preview_form_submit()
+ * @see pub_sps_form_pub_sps_sps_condition_preview_form_alias_alter()
+ */
+function pub_sps_sps_condition_preview_form_submit($form, &$form_state) {
+  $form_state['redirect'] = $_SERVER['HTTP_REFERER'];
+}
+
+/**
+ * Implements hook_page_build().
+ *
+ * Here we add our Ajax settings since we cannot add them in our
+ * pub_sps_admin_menu_output_build() since it gets cached.
+ *
+ * @todo Only add this when absolutely needed.
+ */
+function pub_sps_page_build(&$page) {
+  // This is not required for anonymous users.
+  if (!user_is_logged_in()) {
+    return;
+  }
+  // drupal_add_library()'s Ajax magic is invoked automatically when a form
+  // element has the '#ajax' property, but since we are not rendering a form
+  // here, we have to do it ourselves.
+  $page['page_top']['#attached']['library'][] = array('system', 'drupal.ajax');
+  $page['page_top']['#attached']['css'][] = drupal_get_path('module', 'pub_sps') . '/pub_sps.css';
+  $page['page_top']['#attached']['js'][] = drupal_get_path('module', 'pub_sps') . '/pub_sps.js';
+}
+
+/**
+ * Implements hook_admin_menu_output_build().
+ *
+ * Adds two HTML elements to the Admin Menu. This function gets
+ * cached and only runs once immediately after cache clear
+ * so we cannot add JS settings in here and must do them separately in
+ * pub_sps_page_build().
+ *
+ * We do this so we can have an ajax-processed class on the element ready to
+ * trigger our Ajax callback later on
+ *
+ * @see pub_sps_toolbar_pre_render()
+ */
+function pub_sps_admin_menu_output_build(&$content) {
+  // Add site preview system.
+  $content['sps'] = array(
+    '#access' => module_exists('sps'),
+    '#weight' => 300,
+    '#prefix' => '<div class="sps-toolbar">',
+    '#suffix' => '</div>',
+  );
+  $content['sps']['toolbar'] = array(
+    '#prefix' => '<div id="toolbar">',
+    '#suffix' => '</div>',
+    '#pre_render' => array('pub_sps_toolbar_pre_render'),
+  );
+}
+
+/**
+ * pub_sps_admin_menu_output_build() #pre_render property.
+ *
+ * @todo Explain why.
+ *
+ * @see pub_sps_admin_menu_output_build()
+ */
+function pub_sps_toolbar_pre_render($toolbar) {
+//  $current_path = current_path();
+//  $href = ($current_path == 'front') : '<front>'
+
+  $configure_link = array(
+    '#type' => 'link',
+    '#title' => t('Preview Site'),
+    '#href' => '',
+    '#options' => array(
+      'attributes' => array(
+        'id' => 'preview-site',
+        'class' => array(
+          'sps-preview-form-toggle',
+        )
+      ),
+      // This fragment doesn't actually exist but we use it so that when
+      // clicking the link it just toggles and doesn't do anything. I think
+      // we can probably just use e.preventDefaults() in JS but this works.
+      'fragment' => 'sps-condition-preview-form',
+      'external' => TRUE,
+    ),
+  );
+
+  $drawer = array(
+    'configure' => $configure_link,
+  );
+  $toolbar['toolbar_drawer'][] = $drawer;
+
+  return $toolbar;
+}

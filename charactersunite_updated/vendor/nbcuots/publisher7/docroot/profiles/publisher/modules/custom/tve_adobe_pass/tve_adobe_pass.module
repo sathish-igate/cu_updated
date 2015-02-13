@@ -1,0 +1,356 @@
+<?php
+
+/**
+ * @file
+ * Main file for the TVE Adobe Pass module.
+ *
+ * @ingroup tve_adobe_pass
+ */
+
+define('TVE_ADOBE_PASS_ACCESS_ENABLER', 'http://entitlement.auth-staging.adobe.com/entitlement/AccessEnablerDebug.swf');
+define('TVE_ADOBE_PASS_TIMEOUT', 30000);
+define('TVE_ADOBE_PASS_FLASH_VER', '10.1.13');
+define('TVE_ADOBE_PASS_MESSAGE_AUTH_ERR', 'Your TV subscription does not include this channel. Please contact your TV Provider about upgrading your service to get access.');
+define('TVE_ADOBE_PASS_MESSAGE_INTERNAL_ERR', 'We had a problem reaching your TV provider. Please try again.');
+define('TVE_ADOBE_PASS_MESSAGE_GENERIC_ERR', 'Your TV subscription does not include this channel.');
+define('TVE_ADOBE_PASS_CONFIG_PATH', 'http://api.auth-staging.adobe.com/api/v1/config/');
+define('TVE_ADOBE_PASS_ERROR_LOG_FILENAME', 'adobe_pass_error_log');
+define('TVE_ADOBE_PASS_ERROR_LOG_DELIMITER', ';');
+
+/**
+ * Implements hook_menu().
+ */
+function tve_adobe_pass_menu() {
+  $items['admin/config/services/adobe-pass'] = array(
+    'title' => 'Adobe Pass',
+    'description' => 'Adobe Pass Access Enabler Integration',
+    'access arguments' => array('administer adobe pass'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('tve_adobe_pass_admin_form'),
+    'file' => 'tve_adobe_pass.admin.inc',
+  );
+
+  $items['admin/config/services/adobe-pass/error-logs'] = array(
+    'title' => 'Error logs',
+    'description' => 'Adobe Pass error logs management.',
+    'access arguments' => array('administer adobe pass'),
+    'page callback' => 'tve_adobe_pass_admin_page_error_logs',
+    'file' => 'tve_adobe_pass.admin.inc',
+  );
+
+  $items['admin/config/services/adobe-pass/error-logs/cleanup'] = array(
+    'title' => 'Cleanup',
+    'description' => 'Cleanup Adobe Pass error logs.',
+    'access arguments' => array('administer adobe pass'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('tve_adobe_pass_admin_page_error_logs_cleanup_confirm'),
+    'file' => 'tve_adobe_pass.admin.inc',
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  $items['adobe-pass/log'] = array(
+    'page callback' => 'tve_adobe_pass_log_errors',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function tve_adobe_pass_permission() {
+  return array(
+    'administer adobe pass' => array(
+      'title' => t('Administer Adobe Pass'),
+      'description' => t('Perform administration tasks for Adobe Pass.'),
+    ),
+    'administer adobe pass config variables' => array(
+      'title' => t('Administer Adobe Pass Configuration Variables'),
+      'description' => t('Change Adobe Pass variables and advanced options: access enabler location, request timeout, Adobe Flash version, requestor ID, resource ID, logging.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_library().
+ */
+function tve_adobe_pass_library() {
+  $items = array();
+  $items['swfobject'] = array(
+    'title' => t('SWFObject'),
+    'version' => '2.2',
+    'js' => array(
+      drupal_get_path('module', 'tve_adobe_pass') . '/lib/swfobject.min.js' => array(),
+    ),
+  );
+  $items['adobe_pass_js_api'] = array(
+    'title' => t('TVE: Adobe Pass'),
+    'version' => NULL,
+    'dependencies' => array(
+      array('system', 'jquery.cookie'),
+      array('tve_adobe_pass', 'swfobject'),
+    ),
+    'js' => array(
+      drupal_get_path('module', 'tve_adobe_pass') . '/js/tve_adobe_pass.js' => array(),
+    ),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function tve_adobe_pass_page_alter(&$page) {
+  if (!variable_get('tve_adobe_pass_requestor_id') || !variable_get('tve_adobe_pass_resource_id')) {
+    // TVE Adobe Pass is not configured.
+    return;
+  }
+
+  // TVE Adobe Pass variables (settings).
+  $js_variables = array(
+    'adobePassAccessEnablerLoc' => check_url(variable_get('tve_adobe_pass_accessenabler_loc', TVE_ADOBE_PASS_ACCESS_ENABLER)),
+    'adobePassTimeoutLength' => check_plain(variable_get('tve_adobe_pass_timeout_length', TVE_ADOBE_PASS_TIMEOUT)),
+    'adobePassFlashVer' => check_plain(variable_get('tve_adobe_pass_flash_ver', TVE_ADOBE_PASS_FLASH_VER)),
+    'adobePassRequestorId' => check_plain(variable_get('tve_adobe_pass_requestor_id')),
+    'adobePassResourceId' => check_plain(variable_get('tve_adobe_pass_resource_id')),
+    'errorMessages' => array(
+      'authorized_err' => filter_xss_admin(variable_get('tve_adobe_pass_message_auth_err', TVE_ADOBE_PASS_MESSAGE_AUTH_ERR)),
+      'internal_err' => filter_xss_admin(variable_get('tve_adobe_pass_message_internal_err', TVE_ADOBE_PASS_MESSAGE_INTERNAL_ERR)),
+      'generic_err' => filter_xss_admin(variable_get('tve_adobe_pass_message_generic_err', TVE_ADOBE_PASS_MESSAGE_GENERIC_ERR)),
+    ),
+  );
+
+  // Attach to the "page_top" following components:
+  // - SWFObject library;
+  // - jQuery Cookie system library;
+  // - TVE Adobe Pass JavaScript file;
+  // - TVE Adobe Pass variables.
+
+  $page['page_top']['tve_adobe_pass']['#attached']['library'] = array(
+    array('tve_adobe_pass', 'adobe_pass_js_api'),
+  );
+  $page['page_top']['tve_adobe_pass']['#attached']['js'][] = array(
+    'data' => array('adobePass' => $js_variables),
+    'type' => 'setting',
+  );
+}
+
+/**
+ * Page callback for logging Adobe Pass errors.
+ */
+function tve_adobe_pass_log_errors() {
+  if (!variable_get('tve_adobe_pass_logging', 0)
+    || !flood_is_allowed('tve_adobe_pass_logging', 10)
+  ) {
+    return;
+  }
+
+  flood_register_event('tve_adobe_pass_logging');
+
+  $error_data = !empty($_POST['error']) ? (array) $_POST['error'] : array();
+  $message_data = array();
+  foreach ($error_data as $key => $data) {
+    $key = substr($key, 0, 255);
+    $data = substr($data, 0, 255);
+
+    $message_data[] = "{$key}: {$data}";
+  }
+
+  if (empty($message_data)) {
+    $message_data[] = 'An unknown error has occurred.';
+  }
+
+  $message_data[] = 'User IP address: ' . ip_address();
+
+  $message = "Adobe Pass error:\n" . implode("\n", $message_data);
+
+  watchdog('tve_adobe_pass', $message, array(), WATCHDOG_ERROR);
+
+  // Log error data to file.
+  _tve_adobe_pass_error_log_log_entry($error_data);
+
+  drupal_exit();
+}
+
+/**
+ * Logs error data to file.
+ *
+ * @param array $data
+ *   Log entries.
+ *
+ * @return bool
+ *   TRUE if log entries are written.
+ */
+function _tve_adobe_pass_error_log_log_entry($data) {
+  if (!_tve_adobe_pass_error_log_check_dir() || !_tve_adobe_pass_error_log_check_file()) {
+    watchdog(
+      'tve_adobe_pass',
+      'Could not write Adobe Pass error log to "!path". Please check file system permissions.',
+      array('!path' => _tve_adobe_pass_error_log_get_filepath()),
+      WATCHDOG_ERROR
+    );
+
+    return FALSE;
+  }
+
+  $entry = _tve_adobe_pass_error_log_prepare_entry($data);
+
+  return _tve_adobe_pass_error_log_write_log($entry);
+}
+
+/**
+ * Prepares error entry to be written to a file.
+ *
+ * Makes a csv-formatted string.
+ *
+ * @param array $data
+ *   Log entries.
+ *
+ * @return string
+ *   CSV parsed version of the log entries.
+ */
+function _tve_adobe_pass_error_log_prepare_entry($data) {
+  global $user;
+  $entry = array(
+    'time' => date('Y-m-d H:i:s', REQUEST_TIME),
+    'error' => !empty($data['error']) ? $data['error'] : 'unknown',
+    'error_id' => !empty($data['errorId']) ? $data['errorId'] : '',
+    'error_level' => !empty($data['level']) ? $data['level'] : '',
+    'error_message' => !empty($data['message']) ? $data['message'] : '',
+    'user_name' => $user->uid ? $user->name : 'anonymous',
+    'user_ip' => ip_address(),
+    'user_agent' => !empty($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
+  );
+
+  foreach ($entry as $key => $value) {
+    $value = trim(substr((string) $value, 0, 255));
+    $value = str_replace('"', "'", $value);
+
+    $entry[$key] = '"' . $value . '"';
+  }
+
+  $entry = implode(TVE_ADOBE_PASS_ERROR_LOG_DELIMITER, $entry);
+
+  return $entry;
+}
+
+/**
+ * Returns the name of Adobe Pass error logs directory.
+ *
+ * @return string
+ *   The name of Adobe Pass error logs directory.
+ */
+function _tve_adobe_pass_error_log_get_dir() {
+  return 'private://' . TVE_ADOBE_PASS_ERROR_LOG_FILENAME;
+}
+
+/**
+ * Returns the name of Adobe Pass error log file for current week.
+ *
+ * @return string
+ *   The name of Adobe Pass error log file for current week.
+ */
+function _tve_adobe_pass_error_log_get_filename() {
+  $week = date('W', REQUEST_TIME);
+  $year = date('Y', REQUEST_TIME);
+  $start = date('Y-m-d', strtotime("{$year}-W{$week}-1"));
+  $end = date('Y-m-d', strtotime("{$year}-W{$week}-7"));
+
+  return TVE_ADOBE_PASS_ERROR_LOG_FILENAME . "__{$start}__{$end}.csv";
+}
+
+/**
+ * Returns the full path of Adobe Pass error log file for current week.
+ *
+ * @return string
+ *   The full path of Adobe Pass error log file for current week.
+ */
+function _tve_adobe_pass_error_log_get_filepath() {
+  return _tve_adobe_pass_error_log_get_dir() .
+  DIRECTORY_SEPARATOR .
+  _tve_adobe_pass_error_log_get_filename();
+}
+
+/**
+ * Returns TRUE if Adobe Pass error logs directory is available for writing.
+ *
+ * @return bool
+ *   TRUE if Adobe Pass error logs directory is available for writing.
+ */
+function _tve_adobe_pass_error_log_check_dir() {
+  $directory = _tve_adobe_pass_error_log_get_dir();
+  return file_prepare_directory(
+    $directory,
+    FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS
+  );
+}
+
+/**
+ * Returns TRUE if Adobe Pass error log file is available for writing.
+ *
+ * If the file does not exist, creates the file and writes the header into it.
+ *
+ * @return bool
+ *   TRUE if Adobe Pass error log file is available for writing.
+ */
+function _tve_adobe_pass_error_log_check_file() {
+  $filepath = _tve_adobe_pass_error_log_get_filepath();
+  if (!file_exists($filepath)) {
+    $header = _tve_adobe_pass_error_log_get_file_header();
+    return _tve_adobe_pass_error_log_write_log($header);
+  }
+
+  return is_writable($filepath);
+}
+
+/**
+ * Writes the error log entry to a file.
+ *
+ * Returns boolean operation success status.
+ *
+ * @param string $data
+ *   The data to write.
+ *
+ * @return bool
+ *   TRUE if the log file was written to a file.
+ */
+function _tve_adobe_pass_error_log_write_log($data) {
+  $filepath = _tve_adobe_pass_error_log_get_filepath();
+  return (bool) file_put_contents($filepath, $data . PHP_EOL, FILE_APPEND);
+}
+
+/**
+ * Create file header for logs.
+ *
+ * @return string
+ *   Log file headers.
+ */
+function _tve_adobe_pass_error_log_get_file_header() {
+  return
+    '"Time"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"Error"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"Error ID"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"Error level"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"Error message"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"User name"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"User IP address"' . TVE_ADOBE_PASS_ERROR_LOG_DELIMITER .
+    '"User Agent"';
+}
+
+/**
+ * Implements hook_file_download().
+ */
+function tve_adobe_pass_file_download($uri) {
+  if (FALSE === strpos($uri, TVE_ADOBE_PASS_ERROR_LOG_FILENAME)) {
+    return 0;
+  }
+
+  if (!user_access('administer adobe pass')) {
+    return -1;
+  }
+
+  return array('Content-Type' => 'text/csv');
+}

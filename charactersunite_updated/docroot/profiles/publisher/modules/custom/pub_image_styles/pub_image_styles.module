@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Pub Image Styles feature.
+ */
+
+include_once 'pub_image_styles.features.inc';

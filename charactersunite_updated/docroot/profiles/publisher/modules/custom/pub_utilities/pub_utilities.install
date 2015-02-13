@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * Implementation of hook_enable().
+ */
+function pub_utilities_enable() {
+  // If they're not yet set, attempt to automatically populate the
+  // pub_utilities_git_bin and pub_utilities_drush_bin variables.
+  if (variable_get('pub_utilities_git_bin', '') == '') {
+    variable_set('pub_utilities_git_bin', trim(shell_exec('which git')));
+  }
+  if (variable_get('pub_utilities_drush_bin', '') == '') {
+    variable_set('pub_utilities_drush_bin', trim(shell_exec('which drush')));
+  }
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function pub_utilities_install() {
+  // Automatically populate the github variables.
+  variable_set('pub_utilities_github_org_name', 'NBCUOTS');
+  variable_set('pub_utilities_github_pubcore_repo_name', 'Publisher7');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function pub_utilities_uninstall() {
+  // Delete the git path and github variables, and drush path variable
+  variable_del('pub_utilities_git_bin');
+  variable_del('pub_utilities_github_org_name');
+  variable_del('pub_utilities_github_pubcore_repo_name');
+  variable_del('pub_utilities_drush_bin');
+}
+
+/**
+ * Add the pub_utilities_drush_bin variable to point to the drush binary on the
+ * server.
+ */
+function pub_utilities_update_7000() {
+  variable_set('pub_utilities_drush_bin', trim(shell_exec('which drush')));
+}

@@ -1,0 +1,65 @@
+<?php
+
+/**
+ * @file pub_theplatform.test
+ */
+
+class ThePlatformAPIClassUnitTest extends DrupalUnitTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'thePlatform API Class unit tests',
+      'description' => 'Test that thePlatformAPIRequest class works correctly.',
+      'group' => 'thePlatform',
+    );
+  }
+
+  public function testUninitalizedException() {
+    include_once 'pub_theplatform.api.inc';
+
+    try {
+      $test = new thePlatformAPIRequest();
+      $this->assert(False, "A misconfigured new object didn't throw the error it should have.");
+    }
+    catch (Exception $e) {
+      $this->assertTrue($e->getMessage() === "thePlatform module has not been configured", t("Should throw the right message when it is not configured."));
+    }
+  }
+}
+
+class ThePlatformAPIClassWebTest extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'thePlatform API Class web tests',
+      'description' => 'Test that thePlatformAPIRequest class works correctly.',
+      'group' => 'thePlatform',
+    );
+  }
+
+  public function testGetsCategories() {
+    include_once 'pub_theplatform.api.inc';
+
+    $test = new pubThePlatformAPIRequest('http://feed.theplatform.com/f/hQNl-B/2g1gkJT0urp6'); //This is Syfy's main feed.
+    $response = $test->getCategories()->execute();
+
+    if(is_array($response)) {
+      $this->assertTrue(is_object($response[0]) && isset($response[0]->title), t("The object from thePlatform's feed was format as expected for a category."));
+    }
+    else {
+      $this->assertTrue(False, t('Non-object returned from thePlatform\'s feed'));
+    }
+  }
+
+  public function testGetsItems() {
+    include_once 'pub_theplatform.api.inc';
+
+    $test = new pubThePlatformAPIRequest('http://feed.theplatform.com/f/hQNl-B/2g1gkJT0urp6'); //This is Syfy's main feed.
+    $response = $test->execute();
+
+    if(is_array($response)) {
+      $this->assertTrue(is_object($response[0]) && isset($response[0]->title), t("The object from thePlatform's feed was format as expected for media items."));
+    }
+    else {
+      $this->assertTrue(False, t('Non-object returned from thePlatform\'s feed'));
+    }
+  }
+}

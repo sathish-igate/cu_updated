@@ -1,0 +1,144 @@
+<?php
+
+/**
+ * @file
+ * Zeebox Example module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function zeebox_example_menu() {
+  $items['zeebox-example'] = array(
+    'title' => 'zeebox Example blocks',
+    'description' => 'Some examples of zeebox blocks.',
+    'page callback' => 'zeebox_example_page',
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback for zeebox-example.
+ *
+ * @see zeebox_example_menu()
+ */
+function zeebox_example_page() {
+  $output = '';
+  $beans = array(
+    'zeebox-follow-button-example',
+    'zeebox-play-along-example',
+    'zeebox-hot-tv-rooms-example',
+    'zeebox-tv-room-teaser-example',
+    'zeebox-tv-room-example',
+  );
+  foreach ($beans as $bean) {
+    $block = block_load('bean', $bean);
+    $prerendered_block = _block_get_renderable_array(_block_render_blocks(array($block)));
+    $output .= drupal_render($prerendered_block);
+  }
+
+  return $output;
+}
+
+/**
+ * Create zeebox Example blocks on install.
+ *
+ * Instantiate one example for each of the 5 bean types that ship with zeebox.
+ *
+ * @see zeebox_example_install()
+ */
+function zeebox_example_create_beans() {
+  // Zeebox Follow Button.
+  $beans['zeebox_follow_button'] = bean_create(array('type' => 'zeebox_follow_button'));
+  $beans['zeebox_follow_button']->data = array(
+    'settings' => array(
+      // The Voice.
+      'brand_id' => '137533',
+      'zeebox_example' => TRUE,
+    ),
+  );
+  $beans['zeebox_follow_button']->delta = 'zeebox-follow-button-example';
+  $beans['zeebox_follow_button']->label = 'Zeebox Follow Button example block';
+  $beans['zeebox_follow_button']->title = 'Zeebox Follow Button example block';
+  $beans['zeebox_follow_button']->view_mode = 'default';
+
+  // Zeebox Hot TV Rooms.
+  $beans['zeebox_hot_tv_rooms'] = bean_create(array('type' => 'zeebox_hot_tv_rooms'));
+  $beans['zeebox_hot_tv_rooms']->data = array(
+    'settings' => array(
+      'limit' => '5',
+      'tv_room_link' => FALSE,
+      // The 'user_id' was taken from http://develop.zeebox.com/unboxed/tv-rooms
+      'user_id' => 'u3ee8e013-eb9c-11e1-98a7-0a012a4774bd',
+      'zeebox_example' => TRUE,
+
+    ),
+  );
+  $beans['zeebox_hot_tv_rooms']->delta = 'zeebox-hot-tv-rooms-example';
+  $beans['zeebox_hot_tv_rooms']->label = 'Zeebox Hot TV Rooms example block';
+  $beans['zeebox_hot_tv_rooms']->title = 'Zeebox Hot TV Rooms example block';
+  $beans['zeebox_hot_tv_rooms']->view_mode = 'default';
+
+  // Zeebox Play-along.
+  $beans['zeebox_play_along'] = bean_create(array('type' => 'zeebox_play_along'));
+  $beans['zeebox_play_along']->data = array(
+    'settings' => array(
+      // The Voice.
+      'brand_id' => '137533',
+      'zeebox_example' => TRUE,
+
+    ),
+  );
+  $beans['zeebox_play_along']->delta = 'zeebox-play-along-example';
+  $beans['zeebox_play_along']->label = 'Zeebox Play-along example block';
+  $beans['zeebox_play_along']->title = 'Zeebox Play-along example block';
+  $beans['zeebox_play_along']->view_mode = 'default';
+
+  // Zeebox TV Room Teaser.
+  $beans['zeebox_tv_room_teaser'] = bean_create(array('type' => 'zeebox_tv_room_teaser'));
+  $beans['zeebox_tv_room_teaser']->data = array(
+    'settings' => array(
+      'tv_room_id' => 'ad627b45-cc45-11e2-1066-20c615b252f0',
+      'zeebox_example' => TRUE,
+    ),
+  );
+  $beans['zeebox_tv_room_teaser']->delta = 'zeebox-tv-room-teaser-example';
+  $beans['zeebox_tv_room_teaser']->label = 'Zeebox TV Room Teaser example block';
+  $beans['zeebox_tv_room_teaser']->title = 'Zeebox TV Room Teaser example block';
+  $beans['zeebox_tv_room_teaser']->view_mode = 'default';
+
+  // Zeebox TV Room.
+  $beans['zeebox_tv_room'] = bean_create(array('type' => 'zeebox_tv_room'));
+  $beans['zeebox_tv_room']->data = array(
+    'settings' => array(
+      'tv_room_id' => 'ad627b45-cc45-11e2-1066-20c615b252f0',
+      'zeebox_example' => TRUE,
+
+    ),
+  );
+  $beans['zeebox_tv_room']->delta = 'zeebox-tv-room-example';
+  $beans['zeebox_tv_room']->label = 'Zeebox TV Room example block';
+  $beans['zeebox_tv_room']->title = 'Zeebox TV Room example block';
+  $beans['zeebox_tv_room']->view_mode = 'default';
+
+  // Save and inform the user.
+  foreach ($beans as $bean) {
+    bean_save($bean);
+    drupal_set_message(t('%bean_title has been created.', array('%bean_title' => $bean->title)));
+  }
+}
+
+/**
+ * Delete all example beans.
+ */
+function zeebox_example_delete_beans() {
+  $beans = bean_get_all_beans();
+  foreach ($beans as $bean) {
+    if ($bean->data['settings']['zeebox_example'] === TRUE) {
+      bean_delete($bean);
+      drupal_set_message(t('%bean_title has been deleted.', array('%bean_title' => $bean->title)));
+    }
+  }
+}

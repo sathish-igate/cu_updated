@@ -1,0 +1,38 @@
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall callbacks.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function pub_api_schema() {
+  $schema = array();
+
+  // Replicate drupal's cache table schema.
+  $schema['cache_pub_api'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_pub_api']['description'] = 'Cache table used to store NBC API objects.';
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function pub_api_install() {
+  variable_set('services_rest_server_factory_class', 'PubRESTServerFactory');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function pub_api_uninstall() {
+  variable_del('services_rest_server_factory_class');
+  variable_del('pub_api_cache_lifetime');
+  variable_del('pub_api_accept_header');
+  variable_del('pub_api_page_size');
+  variable_del('pub_api_version');
+  variable_del('pub_api_versions');
+}

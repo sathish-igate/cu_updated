@@ -1,0 +1,41 @@
+<?php
+
+/**
+ * @file
+ * Pub Person test file.
+ */
+
+/**
+ * Lets Test our custom pub_person validations.
+ */
+class PubPersonValidationTestCase extends PublisherWebTestCase {
+
+  /**
+   * Normal static getInfo() method.
+   *
+   * @return array
+   *   Test Information.
+   */
+  public static function getInfo() {
+    return array(
+      'name' => 'Publisher Person Validations.',
+      'description' => 'Publisher Person custom Validation.',
+      'group' => 'Publisher',
+    );
+  }
+
+  /**
+   * Test that a First name or Last Name is filled out.
+   */
+  public function testPersonValidation() {
+    // TODO: Change this to editor and senior editor (When the perms are fixed).
+    $admin = $this->drupalCreateUserWithRole('administrator');
+    $this->drupalLogin($admin);
+    $this->drupalGet('node/add/person');
+    $this->drupalPost(NULL, array(), t('Save'));
+
+    // Assert that our custom validation is working.
+    $message = t('You must enter at least a first name or last name for this person.');
+    $this->assertRaw($message, t('Found error message: !message.', array('!message' => $message)));
+  }
+}

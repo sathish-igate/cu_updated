@@ -1,0 +1,17 @@
+.tve-auth-example-notes.messages {font-size: .75em; margin: 0;}
+
+.tve-auth-example {margin: 40px 0; padding: 8px 20px; border: 1px solid #ccc;}
+.tve-auth-example .hide {display: none;}
+
+.tve-auth-example .featuredMvpds {list-style-type: none;}
+.tve-auth-example .featuredMvpds li {float: left; width: 15%; height: 60px; margin: 1%; padding: 10px; box-shadow: 1px 1px 3px rgba(0,0,0,0.3); text-align: center;  cursor: pointer;}
+.tve-auth-example .featuredMvpds li:after {content: '|'; display: inline-block; line-height: 60px; color: transparent;}
+.tve-auth-example .featuredMvpds img {max-width: 90%; max-height: 100%; vertical-align: middle}
+.tve-auth-example .statusField {display: none;}
+
+.tve-auth-example dd {margin-bottom: .5em; margin-left: .5em; color: #333;font-style: italic;}
+.tve-auth-example pre .string { color: green; }
+.tve-auth-example pre .number { color: #1A2CFF; }
+.tve-auth-example pre .boolean { color: blue; }
+.tve-auth-example pre .null { color: magenta; }
+.tve-auth-example pre .key { color: red; }

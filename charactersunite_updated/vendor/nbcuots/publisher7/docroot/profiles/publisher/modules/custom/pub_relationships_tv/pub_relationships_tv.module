@@ -1,0 +1,143 @@
+<?php
+
+/**
+ * @file
+ * Code for the Pub TV Relationships module.
+ */
+
+define('TV_FIELD_NAME', 'field_pub_relation_tv_shows');
+require_once __DIR__ . '/pub_relationships_tv.field.inc';
+
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function pub_relationships_tv_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'entityreference') {
+    return 'plugins/' . $plugin;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * @see pub_relationships_config
+ */
+function pub_relationships_tv_form_pub_relationships_config_alter(&$form, &$form_state, $form_id) {
+  $content_types = node_type_get_names();
+  $ignored_content_types = array();
+
+  $tv_shows_options = array(
+    'show' => t('Show'),
+    'season' => t('Season'),
+    'episode' => t('Episode'),
+  );
+
+  $form['tv_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('TV'),
+    '#description' => t('What content type should the TV Relationship widget be attached to'),
+    '#group' => 'wrapper',
+    '#weight' => 0,
+  );
+
+  foreach ($content_types as $key => $name) {
+    if (in_array($key, $ignored_content_types)) {
+      // Skip our ignored list.
+      continue;
+    }
+
+    $form_key = 'pub_relationships_tv_content_type_' . $key;
+    $drop_key = 'pub_relationships_tv_content_type_' . $key . '_level';
+
+    $form['tv_settings'][$form_key] = array(
+      '#type' => 'checkbox',
+      '#title' => $name,
+      '#default_value' => variable_get($form_key, FALSE),
+    );
+
+    $form['tv_settings'][$drop_key] = array(
+      '#type' => 'select',
+      '#title' => t('@a TV Relationship Depth', array('@a' => $name)),
+      '#options' => $tv_shows_options,
+      '#default_value' => variable_get($drop_key, FALSE),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="' . $form_key . '"]' => array('checked' => FALSE),
+        ),
+      ),
+    );
+  }
+
+  // Add out custom submit function.
+  $form['#submit'][] = 'pub_relationships_tv_config_submit';
+}
+
+/**
+ * Submit function for pub_relationships_config().
+ *
+ * @see pub_relationships_tv_form_pub_relationships_config_alter()
+ */
+function pub_relationships_tv_config_submit($form, &$form_state) {
+  // Create our field if it is empty.
+  // This really sucks, but we have to loop here.
+  // The reason is that we want individual level per content type.
+  $content_types = node_type_get_names();
+  $ignored_content_types = array();
+  foreach ($content_types as $bundle => $name) {
+    if (in_array($bundle, $ignored_content_types)) {
+      // Skip our ignored list.
+      continue;
+    }
+    // So now we check our varable against our content type.
+    $form_key = 'pub_relationships_tv_content_type_' . $bundle;
+    if (!empty($form_state['values'][$form_key])) {
+      // This content type is selected.
+      // Lets do our thing.
+      pub_relationships_tv_create_field_if_empty();
+      pub_relationships_tv_create_instance_if_empty($bundle);
+    }
+    else {
+      pub_relationships_tv_remove_instance_if_exists($bundle);
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function pub_relationships_tv_form_alter(&$form, &$form_state, $form_id) {
+  if (!empty($form['#node_edit_form']) && $form['#node_edit_form'] === TRUE) {
+    $bundle = $form['#bundle'];
+    if (pub_relationships_tv_bundle_is_enabled($bundle) && !empty($form[TV_FIELD_NAME])) {
+      if (!module_exists('pub_relationships_tv_enhanced')) {
+        pub_relation_add_verticle_add_if_empty($form);
+      }
+
+      pub_relationships_tv_show_valid_fields($form, $bundle);
+      pub_relationships_tv_setup_ajax($form, $form_state);
+      $form['#attached']['css'][] = drupal_get_path('module', 'pub_relationships_tv') . '/pub-relationships-tv.css';
+
+      $form[TV_FIELD_NAME]['#weight'] = 9;
+
+      if (!module_exists('pub_relationships_tv_enhanced')) {
+        $form['pub_relationships'][TV_FIELD_NAME] = $form[TV_FIELD_NAME];
+      }
+      // Unseting here is bad. Try not to play with Form API vs Field API much.
+      $form[TV_FIELD_NAME]['#access'] = FALSE;
+    }
+  }
+}
+
+/**
+ * Simple API function to know if a TV Relationship is enabled for this bundle.
+ */
+function pub_relationships_tv_bundle_is_enabled($bundle) {
+  $form_key = 'pub_relationships_tv_content_type_' . $bundle;
+  $config = variable_get($form_key, FALSE);
+  if ($config !== FALSE) {
+    return TRUE;
+  }
+
+  return FALSE;
+}

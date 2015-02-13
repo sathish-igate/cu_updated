@@ -1,0 +1,42 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_movie module.
+ */
+
+/**
+ * Revert Feature on update and then delete old field "movie_external_urls"
+ * from DB since Features won't.
+ */
+function pub_movie_update_7000() {
+  // The _profiles_all_features_revert() needs cache to be flushed or it won't
+  // revert on db update.
+  drupal_flush_all_caches();
+  _profiles_all_features_revert(array('pub_movie'));
+
+
+  // Delete the old field from the Feature because Features won't.
+  if (field_info_field('field_movie_external_urls')) {
+    field_delete_field('field_movie_external_urls');
+    field_purge_batch(1000);
+  }
+}
+
+/**
+ * Revert Feature on update so the Gigya sharebar field is added.
+ */
+function pub_movie_update_7001() {
+  // The "_profiles_all_features_revert" function no longer does anything. Sites
+  // should revert their features manually or as part of a deployment.
+  _profiles_all_features_revert(array('pub_movie'));
+}
+
+/**
+ * Run update_7000 since there is a chance it may have gotten missed.
+ * Revert Feature on update and then delete old field "movie_external_urls"
+ * from DB since Features won't.
+ */
+function pub_movie_update_7002() {
+  pub_movie_update_7000();
+}

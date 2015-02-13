@@ -1,0 +1,75 @@
+<?php
+/**
+ * @file
+ * Contains install and update functions for pub_theplatform.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function pub_theplatform_install() {
+  $t = get_t();
+
+  drupal_set_message($t("Make sure you goto <a href='/admin/config/services/theplatform'>/admin/config/services/theplatform</a> and set your site settings."));
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function pub_theplatform_update_dependencies() {
+  $dependencies['pub_theplatform'][7002] = array(
+    'media' => 7210,
+  );
+  return $dependencies;
+}
+
+/**
+ * Activate this display if we're updating.
+ */
+function pub_theplatform_update_7001(&$sandbox) {
+  // Load and submit the form so that we have the values we need prepped in the
+  // DB. This is a workaround for the File Entity Module.
+  module_load_include('inc', 'file_entity', 'file_entity.admin');
+  $form = drupal_get_form('file_entity_file_display_form', 'video', 'default');
+  drupal_form_submit('file_entity_file_display_form', $form, 'video', 'default');
+  // Set up the values that we need and save them.
+  $display = file_displays_load('video', 'default', TRUE);
+  $display = $display['theplatform_iframe'];
+  $display->status = 1;
+  file_display_save($display);
+}
+
+/**
+ * Update thePlatform files to the new video file_entity type.
+ */
+function pub_theplatform_update_7002() {
+  $video_type = file_type_load('video');
+  $video_type->mimetypes[] = 'video/theplatform';
+  // Maybe also add stream if is not there already?
+  file_type_save($video_type);
+
+  // Update existing files.
+  db_query("UPDATE {file_managed} SET type = 'video' WHERE type = 'undefined' AND filemime = 'video/theplatform'");
+}
+
+/**
+ * Implements hook_field_schema().
+ *
+ * Defines the schema for the theplatform_category field type.
+ */
+function pub_theplatform_field_schema($field) {
+  $columns = array(
+    'theplatform_category' => array(
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => FALSE,
+    ),
+  );
+  $indexes = array(
+    'theplatform_category' => array('theplatform_category'),
+  );
+  return array(
+    'columns' => $columns,
+    'indexes' => $indexes,
+  );
+}

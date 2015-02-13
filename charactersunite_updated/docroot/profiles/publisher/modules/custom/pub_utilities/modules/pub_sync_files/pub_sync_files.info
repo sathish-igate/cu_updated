@@ -1,0 +1,7 @@
+name = Publisher Sync Files Utility
+description = Allows users to sync files from source to destination.
+core = 7.x
+package = Publisher
+version = 7.x-1.0
+
+dependencies[] = pub_utilities

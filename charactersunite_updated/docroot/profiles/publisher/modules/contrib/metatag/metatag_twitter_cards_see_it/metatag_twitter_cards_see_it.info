@@ -1,0 +1,5 @@
+name = Metatag: Twitter Cards (See It)
+description = "Provides support for Twitter's See It Card meta tag."
+package = SEO
+core = 7.x
+dependencies[] = metatag_twitter_cards

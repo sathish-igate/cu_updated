@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the pub_editorial module.
+ */
+
+/**
+ * Implements hook install.
+ */
+function pub_editorial_install() {
+  pub_editorial_update_7001();
+  pub_editorial_markdown_text_format();
+}
+
+/**
+ * Set pub_editorial to run after the soft_length_limit.
+ */
+function pub_editorial_update_7001() {
+  db_query("UPDATE {system} SET `weight` = '2' WHERE `name` = 'pub_editorial'");
+}
+
+/**
+ * Turn on Prepopulate module.
+ */
+function pub_editorial_update_7002() {
+  if (!module_exists('prepopulate')) {
+    module_enable(array('prepopulate'));
+  }
+}
+
+/**
+ * Update the Publisher profile schema to be 0, not -1.
+ */
+function pub_editorial_update_7003() {
+  if (!module_exists('publisher')) {
+    include_once DRUPAL_ROOT . "/profiles/publisher/publisher.install";
+  }
+  publisher_update_7002();
+}
+
+/**
+ * Update existing installs to have the Markdown text format.
+ */
+function pub_editorial_update_7004() {
+  pub_editorial_markdown_text_format();
+}
